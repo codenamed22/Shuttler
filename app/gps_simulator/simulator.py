@@ -5,6 +5,7 @@ import random
 from ws_server import broadcast_message, start_ws_server
 import asyncio
 
+
 ROUTE_DIR = os.path.join(os.path.dirname(__file__), "..", "routes")
 
 def load_route_files():
