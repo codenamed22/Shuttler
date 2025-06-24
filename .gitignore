@@ -1,2 +1,28 @@
+
 #Ignore pycache files
 __pycache__/
+=======
+# Node modules
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VSCode settings
+.vscode/
+
+# Environment files
+.env
+
+Shuttler/
+
