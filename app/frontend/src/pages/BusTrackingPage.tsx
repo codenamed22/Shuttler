@@ -10,13 +10,15 @@ import { clsx } from 'clsx';
 export const BusTrackingPage: React.FC = () => {
   const { busId } = useParams<{ busId: string }>();
   const [bus, setBus] = useState<BusType | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-
-  useEffect(() => {
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());  useEffect(() => {
     const foundBus = mockBuses.find(b => b.id === busId);
+    
     if (foundBus) {
       setBus(foundBus);
     }
+    
+    setLoading(false);
   }, [busId]);
 
   // Simulate real-time location updates
@@ -46,6 +48,16 @@ export const BusTrackingPage: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [bus]);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading bus information...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!bus) {
     return <Navigate to="/" replace />;
