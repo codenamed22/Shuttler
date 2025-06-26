@@ -1,24 +1,35 @@
 import React, { useState } from 'react';
 import { Search, Filter, MapPin } from 'lucide-react';
 import { BusCard } from '../components/BusCard';
-import { mockBuses } from '../data/mockData';
+import { useLiveBuses } from '../context/LiveBusContext';
+// (If you have a Bus interface, you can still import it here, e.g.)
+// import { Bus } from '../types';
 
 export const HomePage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'delayed' | 'completed'>('all');
+  const [statusFilter, setStatusFilter] =
+    useState<'all' | 'active' | 'delayed' | 'completed'>('all');
 
-  const filteredBuses = mockBuses.filter(bus => {
-    const matchesSearch = bus.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         bus.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         bus.destination.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || bus.status === statusFilter;
-    
+  /* ---- Live fleet coming from WebSocket ---- */
+  const busesObj = useLiveBuses();          // { [busId]: Bus }
+  const buses    = Object.values(busesObj); // → Bus[]
+
+  /* ---- Search + status filtering ---- */
+  const filteredBuses = buses.filter((bus) => {
+    const matchesSearch =
+      bus.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bus.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bus.destination.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === 'all' || bus.status === statusFilter;
+
     return matchesSearch && matchesStatus;
   });
 
-  const activeBuses = mockBuses.filter(bus => bus.status === 'active').length;
-  const totalBuses = mockBuses.length;
+  /* ---- Fleet stats ---- */
+  const activeBuses = buses.filter((bus) => bus.status === 'active').length;
+  const totalBuses  = buses.length;
 
   return (
     <div className="space-y-6">
@@ -48,11 +59,11 @@ export const HomePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Search and Filter */}
+      {/* Search + Filter */}
       <div className="bg-white rounded-lg shadow-sm border p-4">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Search buses, routes, or destinations..."
@@ -61,12 +72,14 @@ export const HomePage: React.FC = () => {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
-          
+
           <div className="flex items-center space-x-2">
             <Filter className="w-5 h-5 text-gray-400" />
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as 'all' | 'active' | 'delayed' | 'completed')
+              }
               className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="all">All Status</option>
@@ -86,15 +99,15 @@ export const HomePage: React.FC = () => {
           </h2>
           <div className="flex items-center space-x-2 text-sm text-gray-600">
             <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-success-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-success-500 rounded-full" />
               <span>Active</span>
             </div>
             <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-warning-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-warning-500 rounded-full" />
               <span>Delayed</span>
             </div>
             <div className="flex items-center space-x-1">
-              <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-gray-500 rounded-full" />
               <span>Completed</span>
             </div>
           </div>
@@ -109,7 +122,9 @@ export const HomePage: React.FC = () => {
         ) : (
           <div className="text-center py-12">
             <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No buses found</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No buses found
+            </h3>
             <p className="text-gray-600">
               Try adjusting your search or filter criteria.
             </p>
