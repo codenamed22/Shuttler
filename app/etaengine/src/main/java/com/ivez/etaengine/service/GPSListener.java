@@ -18,7 +18,8 @@ public class GPSListener extends WebSocketClient {
 
     // Connect to simulator WebSocket URL
     public GPSListener(BusStateTracker tracker, EtaPredictor predictor) {
-        super(URI.create("ws://localhost:8081/ws")); // Change if simulator runs elsewhere
+        super(URI.create("ws://localhost:8765"));
+        ; // Change if simulator runs elsewhere
         this.busStateTracker = tracker;
         this.etaPredictor = predictor;
     }

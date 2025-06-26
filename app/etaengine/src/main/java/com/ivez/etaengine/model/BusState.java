@@ -1,10 +1,10 @@
 package com.ivez.etaengine.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-// Represents current state of a bus
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -13,5 +13,7 @@ public class BusState {
     private double lat;
     private double lon;
     private double speed; // in m/s
+
+    @JsonProperty("timestamp")
     private long lastUpdated;
 }
