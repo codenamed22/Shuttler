@@ -13,4 +13,5 @@ public class BusPing {
     private double lat;
     private double lon;
     private long timestamp;
+    private double speed; // ✅ Added field to fix deserialization error
 }
