@@ -47,7 +47,7 @@ class Bus:
         self.speed_kmph += random.uniform(-2.0, 2.0)
         self.speed_kmph = max(10.0, min(self.speed_kmph, 50.0))  # Clamp
         
-        distance_m = (self.speed_kmph * 1000) / 3600 * tick_seconds
+        distance_m = ((self.speed_kmph * 1000) / 3600) * tick_seconds
         
         route_len = len(self.route_points)
         while distance_m > 0:

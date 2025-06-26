@@ -2,11 +2,15 @@ package com.ivez.etaengine.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivez.etaengine.model.BusPing;
+import com.ivez.etaengine.model.Coordinate;
+import com.ivez.etaengine.model.RouteData;
+import com.ivez.etaengine.model.Stop;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
+import java.util.List;
 
 // This service connects to the GPS simulator WebSocket and listens for pings
 @Service
@@ -14,14 +18,16 @@ public class GPSListener extends WebSocketClient {
 
     private final BusStateTracker busStateTracker;
     private final EtaPredictor etaPredictor;
+    private Routes routes;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Connect to simulator WebSocket URL
-    public GPSListener(BusStateTracker tracker, EtaPredictor predictor) {
+    public GPSListener(BusStateTracker tracker, EtaPredictor predictor, Routes routes) {
         super(URI.create("ws://localhost:8765"));
         ; // Change if simulator runs elsewhere
         this.busStateTracker = tracker;
         this.etaPredictor = predictor;
+        this.routes = routes;
     }
 
     @Override
@@ -37,6 +43,16 @@ public class GPSListener extends WebSocketClient {
 
             // Simple validation
             if (ping.getBusId() != null && ping.getLat() != 0) {
+
+                RouteData route = routes.getRoute(ping.getBusId());
+                if (route == null) {
+                    System.err.println("Unknown busId: " + ping.getBusId());
+                    return;
+                }
+
+                List<Coordinate> routeCoords = route.getCoordinates();
+                List<Stop> stops = route.getStops();
+
                 busStateTracker.updateBusState(ping); // Track bus
                 etaPredictor.updateEta(busStateTracker.getState(ping.getBusId())); // Predict ETA
             }

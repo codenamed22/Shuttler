@@ -11,5 +11,6 @@ import lombok.NoArgsConstructor;
 public class EtaPrediction {
     private String busId;
     private String stopId;
-    private long etaTimestamp; // ETA in epoch millis
+    private long etaTimestamp;// ETA in epoch millis
+    private long lastUpdated;
 }
