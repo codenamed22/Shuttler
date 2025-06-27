@@ -7,7 +7,7 @@ export interface PingMessage {
   lat: number;
   lon: number;
   timestamp: number;
-  arrivedStops: string[];
+  arrivedStops: string[]; // from backend payload
 }
 
 type Listener = (msg: PingMessage) => void;
@@ -20,6 +20,7 @@ export class GPSSocket {
     this.ws = new WebSocket(`${WS_BASE}/ws/eta`);
   }
 
+  /** Register a listener for each GPS ping */
   onPing(cb: Listener) {
     this.ws.onmessage = (ev) => {
       try {
@@ -30,6 +31,7 @@ export class GPSSocket {
     };
   }
 
+  /** Close the WebSocket */
   close() {
     this.ws.close();
   }
