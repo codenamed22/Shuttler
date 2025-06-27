@@ -1,25 +1,23 @@
 package com.ivez.etaengine.config;
 
+import com.ivez.etaengine.ws.EtaWebSocketHandler;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
-import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
-import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
-import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.*;
 
 @Configuration
-@EnableWebSocketMessageBroker
-public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+@EnableWebSocket
+public class WebSocketConfig implements WebSocketConfigurer {
 
-    @Override
-    public void configureMessageBroker(MessageBrokerRegistry config) {
-        // Enables a simple in-memory message broker on /topic
-        config.enableSimpleBroker("/topic");
-        config.setApplicationDestinationPrefixes("/app");
+    private final EtaWebSocketHandler etaWebSocketHandler;
+
+    public WebSocketConfig(EtaWebSocketHandler etaWebSocketHandler) {
+        this.etaWebSocketHandler = etaWebSocketHandler;
     }
 
     @Override
-    public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // WebSocket endpoint frontend connects to
-        registry.addEndpoint("/ws").setAllowedOriginPatterns("*").withSockJS();
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        registry.addHandler(etaWebSocketHandler, "/ws/eta")
+                .setAllowedOrigins("*");
     }
 }
