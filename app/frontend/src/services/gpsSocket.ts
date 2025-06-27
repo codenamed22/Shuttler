@@ -7,17 +7,20 @@ export interface PingMessage {
   lat: number;
   lon: number;
   timestamp: number;
-  arrivedStops: string[];      // from backend payload
+  arrivedStops: string[];
 }
+
+type Listener = (msg: PingMessage) => void;
 
 export class GPSSocket {
   private ws: WebSocket;
 
   constructor() {
-    this.ws = new WebSocket(`${WS_BASE}/ws/eta`);   // ✅ backend stream
+    // single GPS feed socket
+    this.ws = new WebSocket(`${WS_BASE}/ws/eta`);
   }
 
-  onPing(cb: (p: PingMessage) => void) {
+  onPing(cb: Listener) {
     this.ws.onmessage = (ev) => {
       try {
         cb(JSON.parse(ev.data) as PingMessage);

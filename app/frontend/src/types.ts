@@ -1,10 +1,16 @@
+/* src/types.ts */
+
 export interface BusStop {
   id: string;
   name: string;
   coordinates: [number, number];
   completed: boolean;
-  estimatedTime: string;
-  departureTime: string;
+
+  /** ETA text such as “3 min” _or_ seconds; undefined until prediction arrives */
+  estimatedTime?: string;          // ← optional
+
+  /** ISO string or epoch ms when bus departed; undefined until arrival */
+  departureTime?: string;          // ← optional
 }
 
 export interface Bus {
@@ -18,7 +24,7 @@ export interface Bus {
   status: 'active' | 'delayed' | 'completed';
   currentLocation: [number, number];
   route: [number, number][];
-  stops: BusStop[]; 
+  stops: BusStop[];
   completedRouteIndex: number;
   lastPing?: number;
 }
