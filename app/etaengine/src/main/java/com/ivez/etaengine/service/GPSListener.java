@@ -1,74 +1,71 @@
 package com.ivez.etaengine.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ivez.etaengine.model.BusPing;
-import com.ivez.etaengine.model.Coordinate;
-import com.ivez.etaengine.model.RouteData;
-import com.ivez.etaengine.model.Stop;
+import com.ivez.etaengine.model.*;
+import com.ivez.etaengine.ws.EtaWebSocketHandler;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
-import java.util.List;
+import java.util.Map;
 
-// This service connects to the GPS simulator WebSocket and listens for pings
 @Service
 public class GPSListener extends WebSocketClient {
 
-    private final BusStateTracker busStateTracker;
-    private final EtaPredictor etaPredictor;
-    private Routes routes;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final BusStateTracker     busStateTracker;
+    private final EtaPredictor        etaPredictor;
+    private final Routes              routes;
+    private final EtaWebSocketHandler etaWs;
+    private final ObjectMapper        objectMapper = new ObjectMapper();
 
-    // Connect to simulator WebSocket URL
-    public GPSListener(BusStateTracker tracker, EtaPredictor predictor, Routes routes) {
+    public GPSListener(
+            BusStateTracker tracker,
+            EtaPredictor predictor,
+            Routes routes,
+            EtaWebSocketHandler etaWs
+    ) {
         super(URI.create("ws://localhost:8765"));
-        ; // Change if simulator runs elsewhere
         this.busStateTracker = tracker;
-        this.etaPredictor = predictor;
-        this.routes = routes;
+        this.etaPredictor    = predictor;
+        this.routes          = routes;
+        this.etaWs           = etaWs;
     }
 
     @Override
-    public void onOpen(ServerHandshake handshakedata) {
+    public void onOpen(ServerHandshake hs) {
         System.out.println("✅ Connected to GPS Simulator WebSocket");
     }
 
     @Override
     public void onMessage(String message) {
         try {
-            // Convert JSON string to BusPing object
+            /* 1️⃣ Parse raw ping ------------------------------------------------ */
             BusPing ping = objectMapper.readValue(message, BusPing.class);
-            long now = (System.currentTimeMillis()) / 1000;
+            long nowSec  = System.currentTimeMillis() / 1000;
 
-            // Simple validation
-            if (ping.getBusId() != null && ping.getLat() != 0) {
+            if (ping.getBusId() == null || ping.getLat() == 0) return;
+            if (nowSec - ping.getTimestamp() > 120) return;         // >2-min delay
+            if (!busStateTracker.isNewer(ping))      return;
 
-                RouteData route = routes.getRoute(ping.getBusId());
-                if (route == null) {
-                    System.err.println("Unknown busId: " + ping.getBusId());
-                    return;
-                }
+            /* 2️⃣ Update trackers & ETA ---------------------------------------- */
+            busStateTracker.updateBusState(ping);
+            BusState state = busStateTracker.getState(ping.getBusId());
+            etaPredictor.updateEta(state);                          // Kalman, etc.
 
-                List<Coordinate> routeCoords = route.getCoordinates();
-                List<Stop> stops = route.getStops();
+            /* 3️⃣ Build view object & broadcast ------------------------------- */
+            Map<String, Object> view = Map.of(
+                    "busId",        state.getBusId(),
+                    "lat",          state.getLat(),          // already smoothed
+                    "lon",          state.getLon(),
+                    "timestamp",    state.getLastUpdated(),
+                    "arrivedStops", state.getArrivedStops()  // HashSet<String>
+            );
 
-                if(!busStateTracker.isNewer(ping)){
-                    System.out.println("Stale ping ignored for bus: " + ping.getBusId());
-                    return;
-                }
-                System.out.println("Time Diff : " + (now - ping.getTimestamp()));
-                if ((now - ping.getTimestamp()) > 2 * 60 * 1000) {
-                    System.out.println("Ping too delayed, skipping: " + ping.getBusId());
-                    return;
-                }
+            etaWs.broadcastEtaUpdate(objectMapper.writeValueAsString(view));
 
-                busStateTracker.updateBusState(ping); // Track bus
-                etaPredictor.updateEta(busStateTracker.getState(ping.getBusId())); // Predict ETA
-            }
         } catch (Exception e) {
-            System.err.println("❌ Failed to parse GPS ping: " + e.getMessage());
+            System.err.println("❌ Failed to handle GPS ping: " + e.getMessage());
         }
     }
 
@@ -79,6 +76,6 @@ public class GPSListener extends WebSocketClient {
 
     @Override
     public void onError(Exception ex) {
-        System.out.println("❗ Error in GPS WebSocket: " + ex.getMessage());
+        System.out.println("❗ GPS WebSocket error: " + ex.getMessage());
     }
 }

@@ -1,31 +1,33 @@
-// gpsSocket.ts
+// src/services/gpsSocket.ts
+const WS_BASE =
+  (import.meta.env.VITE_WS_BASE as string | undefined) ?? "ws://localhost:8080";
+
 export interface PingMessage {
   busId: string;
   lat: number;
   lon: number;
-  index: number;
   timestamp: number;
+  arrivedStops: string[];      // from backend payload
 }
 
-type Listener = (msg: PingMessage) => void;
-
 export class GPSSocket {
-  private socket: WebSocket;
-  private listeners: Listener[] = [];
+  private ws: WebSocket;
 
-  constructor(url = 'ws://localhost:8765') {
-    this.socket = new WebSocket(url);
-    this.socket.onmessage = e => {
-      const msg = JSON.parse(e.data) as PingMessage;
-      this.listeners.forEach(l => l(msg));
+  constructor() {
+    this.ws = new WebSocket(`${WS_BASE}/ws/eta`);   // ✅ backend stream
+  }
+
+  onPing(cb: (p: PingMessage) => void) {
+    this.ws.onmessage = (ev) => {
+      try {
+        cb(JSON.parse(ev.data) as PingMessage);
+      } catch {
+        console.warn("Bad GPS payload:", ev.data);
+      }
     };
   }
 
-  onPing(cb: Listener) {
-    this.listeners.push(cb);
-  }
-
   close() {
-    this.socket.close();
+    this.ws.close();
   }
 }
