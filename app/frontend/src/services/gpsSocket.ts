@@ -7,6 +7,7 @@ export interface PingMessage {
   timestamp: number;
 }
 
+
 type Listener = (msg: PingMessage) => void;
 
 export class GPSSocket {
