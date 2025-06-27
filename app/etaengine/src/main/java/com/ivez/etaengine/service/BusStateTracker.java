@@ -34,15 +34,7 @@ public class BusStateTracker {
 
 
         RouteData route = routes.getRoute(ping.getBusId());
-        for(Stop stop : route.getStops()){
-            if(previous.getArrivedStops().contains(stop.getStopId()))
-                continue;
-            double dist = haversine(ping.getLat(), ping.getLon(), stop.getLat(), stop.getLon());
-            if (dist <= 50.0) {
-                System.out.println("Bus " + ping.getBusId() + " arrived at stop " + stop.getName());
-                previous.getArrivedStops().add(stop.getStopId());
-            }
-        }
+
 
         if (route == null) {
             System.err.println("Unknown route for busId: " + ping.getBusId());
@@ -54,6 +46,17 @@ public class BusStateTracker {
 
 
         if (previous != null) {
+
+            for(Stop stop : route.getStops()){
+                if(previous.getArrivedStops().contains(stop.getStopId()))
+                    continue;
+                double dist = haversine(ping.getLat(), ping.getLon(), stop.getLat(), stop.getLon());
+                if (dist <= 50.0) {
+                    System.out.println("Bus " + ping.getBusId() + " arrived at stop " + stop.getName());
+                    previous.getArrivedStops().add(stop.getStopId());
+                }
+            }
+
             System.out.println("Time diff : " + (ping.getTimestamp() - previous.getLastUpdated()));
             if(ping.getTimestamp() - previous.getLastUpdated() < minGapMillis)
                 return;

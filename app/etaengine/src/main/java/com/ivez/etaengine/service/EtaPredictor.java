@@ -1,8 +1,11 @@
 package com.ivez.etaengine.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivez.etaengine.model.*;
 import com.ivez.etaengine.util.GeoUtils;
 import com.ivez.etaengine.util.KalmanFilter;
+import com.ivez.etaengine.ws.EtaWebSocketHandler;
 import org.springframework.stereotype.Service;
 
 import java.sql.SQLOutput;
@@ -21,6 +24,7 @@ public class EtaPredictor {
     private final Map<String, KalmanFilter> filters = new HashMap<>();
     //private final List<Stop> stops;
     private final Routes routes;
+    private final EtaWebSocketHandler etaWebSocketHandler;
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss")
             .withZone(ZoneId.systemDefault());
@@ -31,11 +35,12 @@ public class EtaPredictor {
     private static final int MIN_ETA_UPDATE = 5000; // 5 secs
     //private static final int MAX_ETA_JUMP_SEC = 3000; // 5 minutes
 
-    public EtaPredictor(Routes routes) {
+    public EtaPredictor(Routes routes, EtaWebSocketHandler etaWebSocketHandler) {
         this.routes = routes;
+        this.etaWebSocketHandler = etaWebSocketHandler;
     }
 
-    public void updateEta(BusState busState) {
+    public void updateEta(BusState busState) throws JsonProcessingException {
 
         long now = System.currentTimeMillis();
         List<EtaPrediction> prevPrediction = predictionMap.get(busState.getBusId());
@@ -107,6 +112,20 @@ public class EtaPredictor {
 
         if (!newPredictions.isEmpty()) {
             predictionMap.put(busState.getBusId(), newPredictions);
+
+
+            EtaUpdateDTO etaUpdate = new EtaUpdateDTO();
+            etaUpdate.setBusId(busState.getBusId());
+            Map<String, Long> temp = new HashMap<>();
+            for( EtaPrediction eta : newPredictions){
+                temp.put(eta.getStopId(),eta.getEtaTimestamp());
+            }
+            etaUpdate.setEtaPerStop(temp);
+            ObjectMapper mapper = new ObjectMapper();
+            String json = mapper.writeValueAsString(etaUpdate);
+            etaWebSocketHandler.broadcastEtaUpdate(json);
+
+
             System.out.printf("📍 Bus: %s | Speed: %.2f m/s | ETAs: %s%n",
                     busState.getBusId(), speed, String.join(" | ", etaLogs));
             System.out.println("✅ Stored predictions for " + busState.getBusId());
