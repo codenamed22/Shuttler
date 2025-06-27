@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Search, Filter, MapPin } from 'lucide-react';
 import { BusCard } from '../components/BusCard';
 import { useLiveBuses } from '../context/LiveBusContext';
+import { Link } from "react-router-dom";
+
 // (If you have a Bus interface, you can still import it here, e.g.)
 // import { Bus } from '../types';
 
@@ -39,6 +41,13 @@ export const HomePage: React.FC = () => {
         <p className="text-primary-100 mb-4">
           Monitor all buses and their real-time locations
         </p>
+        <Link
+          to="/dashboard"
+          className="inline-block mb-6 rounded bg-white/20 px-4 py-2 text-sm font-medium
+                     text-white backdrop-blur hover:bg-white/30 transition"
+        >
+          Open ETA Dashboard →
+        </Link>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white/10 rounded-lg p-3">
             <div className="text-2xl font-bold">{activeBuses}</div>
