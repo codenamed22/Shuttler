@@ -18,12 +18,11 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
   const [buses, setBuses] = useState<BusMap>({});
   const downloadedRoutes = useRef<Set<string>>(new Set()); // avoid double-fetch
 
-  /* ───── WebSocket listener ───── */
   useEffect(() => {
     const ws = new GPSSocket();
 
     ws.onPing(async (ping: PingMessage) => {
-      /*   always update live fields */
+      // Always update live fields
       setBuses(prev => {
         const existing = prev[ping.busId];
 
@@ -53,14 +52,13 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
         return { ...prev, [ping.busId]: next };
       });
 
-      /*   lazy-load the GeoJSON once per busId */
+      // lazy-load the GeoJSON once per busId
       const routeKey = ping.busId;
       if (downloadedRoutes.current.has(routeKey)) return;
       downloadedRoutes.current.add(routeKey);
 
       try {
-        const routeFile = BUS_ROUTE_MAP[ping.busId] ?? ping.busId;   // fallback
-
+        const routeFile = BUS_ROUTE_MAP[ping.busId] ?? ping.busId;
         const res = await fetch(`http://localhost:8000/route_${routeFile}.geojson`);
         if (!res.ok) {
           console.error('404 route file', res.url);
@@ -70,12 +68,10 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
         const geo = await res.json();
         const feature = geo.features[0];
 
-        /* coords [lon,lat] -> [lat,lon] */
         const route: [number, number][] = feature.geometry.coordinates.map(
           ([lon, lat]: [number, number]) => [lat, lon] as [number, number]
         );
 
-        /* stops */
         const stopsRaw = feature.properties.stops as {
           stopId: string;
           name: string;
@@ -95,7 +91,6 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
         const origin = stops[0]?.name ?? '–';
         const destination = stops.at(-1)?.name ?? '–';
 
-        /* patch the bus with static data */
         setBuses(prev => ({
           ...prev,
           [ping.busId]: {
@@ -115,7 +110,9 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <LiveBusContext.Provider value={buses}>{children}</LiveBusContext.Provider>
+    <LiveBusContext.Provider value={buses}>
+      {children}
+    </LiveBusContext.Provider>
   );
 };
 
