@@ -4,6 +4,7 @@ import com.ivez.etaengine.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -135,4 +136,10 @@ public class BusStateTracker {
 
         return haversine(px, py, projX, projY);
     }
+
+    public boolean isNewer(BusPing ping){
+        BusState latest = stateMap.get(ping.getBusId());
+        return latest == null || ping.getTimestamp() > latest.getLastUpdated();
+    }
+
 }
