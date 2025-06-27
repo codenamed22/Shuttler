@@ -1,9 +1,12 @@
+// gpsSocket.ts
 export interface PingMessage {
   busId: string;
   lat: number;
   lon: number;
+  index: number;
   timestamp: number;
 }
+
 
 type Listener = (msg: PingMessage) => void;
 
