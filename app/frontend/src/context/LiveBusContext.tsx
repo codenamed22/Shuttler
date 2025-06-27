@@ -3,65 +3,104 @@ import React, {
   useContext,
   useEffect,
   useRef,
-  useState
-} from 'react';
-import { GPSSocket, PingMessage } from '../services/gpsSocket';
-import { Bus } from '../types';
-import { BUS_ROUTE_MAP } from '../constants/routeMap';
+  useState,
+} from "react";
+import { GPSSocket, PingMessage } from "../services/gpsSocket";
+import { Bus } from "../types";
+import { BUS_ROUTE_MAP } from "../constants/routeMap";
+import { getDistance } from "geolib";
 
+// Context type
 type BusMap = Record<string, Bus>;
 const LiveBusContext = createContext<BusMap>({});
 
+const MIN_MOVE_METERS = 15;
+
 export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
-  children
+  children,
 }) => {
   const [buses, setBuses] = useState<BusMap>({});
-  const downloadedRoutes = useRef<Set<string>>(new Set()); // avoid double-fetch
+  const downloadedRoutes = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const ws = new GPSSocket();
 
     ws.onPing(async (ping: PingMessage) => {
-      // Always update live fields
-      setBuses(prev => {
+      // 🔒 Early exit if lat/lon is missing or invalid
+      if (!Number.isFinite(ping.lat) || !Number.isFinite(ping.lon)) {
+        console.warn("❌ Bad GPS ping received:", ping);
+        return;
+      }
+
+      // 🔁 Update buses state
+      setBuses((prev) => {
         const existing = prev[ping.busId];
 
-        const base: Bus = existing ?? {
-          id: ping.busId,
-          name: `Bus ${ping.busId}`,
-          origin: '–',
-          destination: '–',
-          driver: '–',
-          capacity: 50,
-          occupancy: 0,
-          status: 'active',
-          currentLocation: [ping.lat, ping.lon],
-          stops: [],
-          route: [],
-          completedRouteIndex: 0
-        };
+        // ✅ Distance gate (avoid jitter)
+        if (
+          existing &&
+          Array.isArray(existing.currentLocation) &&
+          Number.isFinite(existing.currentLocation[0]) &&
+          Number.isFinite(existing.currentLocation[1])
+        ) {
+          const dist = getDistance(
+            {
+              latitude: existing.currentLocation[0],
+              longitude: existing.currentLocation[1],
+            },
+            {
+              latitude: ping.lat,
+              longitude: ping.lon,
+            }
+          );
+
+          if (dist < MIN_MOVE_METERS) return prev;
+        }
+
+        const base: Bus =
+          existing ?? {
+            id: ping.busId,
+            name: `Bus ${ping.busId}`,
+            origin: "–",
+            destination: "–",
+            driver: "–",
+            capacity: 50,
+            occupancy: 0,
+            status: "active",
+            currentLocation: [ping.lat, ping.lon],
+            stops: [],
+            route: [],
+            completedRouteIndex: 0,
+          };
+
+        const updatedStops = base.stops.map((stop) => ({
+          ...stop,
+          completed: ping.arrivedStops?.includes(stop.id) ?? false,
+        }));
 
         const next: Bus = {
           ...base,
           currentLocation: [ping.lat, ping.lon],
           lastPing: ping.timestamp,
-          completedRouteIndex: ping.index ?? base.completedRouteIndex,
-          status: 'active'
+          stops: updatedStops,
+          status: "active",
         };
 
         return { ...prev, [ping.busId]: next };
       });
 
-      // lazy-load the GeoJSON once per busId
-      const routeKey = ping.busId;
-      if (downloadedRoutes.current.has(routeKey)) return;
-      downloadedRoutes.current.add(routeKey);
+      // 📦 Lazy load route data (only once per bus)
+      if (downloadedRoutes.current.has(ping.busId)) return;
+      downloadedRoutes.current.add(ping.busId);
 
       try {
         const routeFile = BUS_ROUTE_MAP[ping.busId] ?? ping.busId;
-        const res = await fetch(`http://localhost:8000/route_${routeFile}.geojson`);
+        const res = await fetch(
+          `http://localhost:8000/route_${routeFile}.geojson`
+        );
+
         if (!res.ok) {
-          console.error('404 route file', res.url);
+          console.error("🚫 404 while fetching route file:", res.url);
           return;
         }
 
@@ -69,7 +108,7 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
         const feature = geo.features[0];
 
         const route: [number, number][] = feature.geometry.coordinates.map(
-          ([lon, lat]: [number, number]) => [lat, lon] as [number, number]
+          ([lon, lat]: [number, number]) => [lat, lon]
         );
 
         const stopsRaw = feature.properties.stops as {
@@ -79,30 +118,34 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
           lon: number;
         }[];
 
-        const stops = stopsRaw.map(s => ({
-          id: s.stopId,
-          name: s.name,
-          coordinates: [s.lat, s.lon] as [number, number],
-          completed: false,
-          estimatedTime: '',
-          departureTime: ''
-        }));
+        setBuses((prev) => {
+          const current = prev[ping.busId];
 
-        const origin = stops[0]?.name ?? '–';
-        const destination = stops.at(-1)?.name ?? '–';
+          const stops = stopsRaw.map((s) => ({
+            id: s.stopId,
+            name: s.name,
+            coordinates: [s.lat, s.lon] as [number, number],
+            completed: ping.arrivedStops?.includes(s.stopId) ?? false,
+            estimatedTime: "",
+            departureTime: "",
+          }));
 
-        setBuses(prev => ({
-          ...prev,
-          [ping.busId]: {
-            ...prev[ping.busId],
-            route,
-            stops,
-            origin,
-            destination
-          }
-        }));
+          const origin = stops[0]?.name ?? "–";
+          const destination = stops.at(-1)?.name ?? "–";
+
+          return {
+            ...prev,
+            [ping.busId]: {
+              ...prev[ping.busId],
+              route,
+              stops,
+              origin,
+              destination,
+            },
+          };
+        });
       } catch (err) {
-        console.error('Failed to fetch route file', err);
+        console.error("❌ Failed to fetch route file:", err);
       }
     });
 
