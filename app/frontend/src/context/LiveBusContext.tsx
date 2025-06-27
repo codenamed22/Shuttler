@@ -1,3 +1,4 @@
+/* app/frontend/src/context/LiveBusContext.tsx */
 import React, {
   createContext,
   useContext,
@@ -10,10 +11,18 @@ import { Bus, BusStop } from "../types";
 import { BUS_ROUTE_MAP } from "../constants/routeMap";
 import { getDistance } from "geolib";
 
+/* ------------------------------------------------------------------ */
+/* Context & helpers                                                  */
+/* ------------------------------------------------------------------ */
+
 type BusMap = Record<string, Bus>;
 const LiveBusContext = createContext<BusMap>({});
 
 const MIN_MOVE_METERS = 15;
+
+/* ------------------------------------------------------------------ */
+/* Provider                                                           */
+/* ------------------------------------------------------------------ */
 
 export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -21,23 +30,23 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
   const [buses, setBuses] = useState<BusMap>({});
   const downloadedRoutes = useRef<Set<string>>(new Set());
 
-  /* ────────── GPS WebSocket ────────── */
+  /* ────────── GPS WebSocket (port 8765) ────────── */
   useEffect(() => {
     const gps = new GPSSocket();
 
     gps.onPing(async (ping: PingMessage) => {
-      /* reject malformed lat/lon */
+      /* ignore malformed coords */
       if (!Number.isFinite(ping.lat) || !Number.isFinite(ping.lon)) return;
 
-      /* live update */
+      /* -------- live location update -------- */
       setBuses((prev) => {
         const existing = prev[ping.busId];
 
-        /* ignore jitter <15 m */
+        /* jitter filter */
         if (existing?.currentLocation) {
           const dist = getDistance(
             { latitude: existing.currentLocation[0], longitude: existing.currentLocation[1] },
-            { latitude: ping.lat,              longitude: ping.lon }
+            { latitude: ping.lat,                    longitude: ping.lon }
           );
           if (dist < MIN_MOVE_METERS) return prev;
         }
@@ -55,6 +64,7 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
             currentLocation: [ping.lat, ping.lon],
             route: [],
             stops: [],
+            completedRouteIndex: 0,
           };
 
         const updatedStops = base.stops.map((st) => ({
@@ -69,53 +79,57 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
             currentLocation: [ping.lat, ping.lon],
             lastPing: ping.timestamp,
             stops: updatedStops,
+            completedRouteIndex: (ping as any).index ?? base.completedRouteIndex,
           },
         };
       });
 
-      /* lazy-load route once */
+      /* -------- lazy-load route once per bus -------- */
       if (downloadedRoutes.current.has(ping.busId)) return;
       downloadedRoutes.current.add(ping.busId);
 
       try {
-        const file = BUS_ROUTE_MAP[ping.busId] ?? ping.busId;
-        const res = await fetch(`http://localhost:8000/route_${file}.geojson`);
-        if (!res.ok) return;
+        const routeFile = BUS_ROUTE_MAP[ping.busId] ?? ping.busId;
+        const res = await fetch(`http://localhost:8000/route_${routeFile}.geojson`);
+        if (!res.ok) {
+          console.error("404 route file:", res.url);
+          return;
+        }
 
         const geo = await res.json();
-        const coords = geo.features[0].geometry.coordinates;
-        const route: [number, number][] = coords.map(
+        const feature = geo.features[0];
+
+        /* coords [lon,lat] → [lat,lon] */
+        const route: [number, number][] = feature.geometry.coordinates.map(
           ([lon, lat]: [number, number]) => [lat, lon]
         );
 
-        const stopsRaw = geo.features[0].properties.stops as {
+        const stopsRaw = feature.properties.stops as {
           stopId: string;
           name: string;
           lat: number;
           lon: number;
         }[];
 
-        setBuses((prev) => {
-          const stops: BusStop[] = stopsRaw.map((s) => ({
-            id: s.stopId,
-            name: s.name,
-            coordinates: [s.lat, s.lon],
-            completed: ping.arrivedStops?.includes(s.stopId) ?? false,
-            estimatedTime: undefined,
-            departureTime: undefined,
-          }));
+        const stops: BusStop[] = stopsRaw.map((s) => ({
+          id: s.stopId,
+          name: s.name,
+          coordinates: [s.lat, s.lon],
+          completed: ping.arrivedStops?.includes(s.stopId) ?? false,
+          estimatedTime: undefined,
+          departureTime: undefined,
+        }));
 
-          return {
-            ...prev,
-            [ping.busId]: {
-              ...prev[ping.busId],
-              route,
-              stops,
-              origin: stops[0]?.name ?? "–",
-              destination: stops.at(-1)?.name ?? "–",
-            },
-          };
-        });
+        setBuses((prev) => ({
+          ...prev,
+          [ping.busId]: {
+            ...prev[ping.busId],
+            route,
+            stops,
+            origin: stops[0]?.name ?? "–",
+            destination: stops.at(-1)?.name ?? "–",
+          },
+        }));
       } catch (err) {
         console.error("route load failed:", err);
       }
@@ -124,9 +138,13 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => gps.close();
   }, []);
 
+  /* ------------------------------------------------------------------ */
   return (
     <LiveBusContext.Provider value={buses}>{children}</LiveBusContext.Provider>
   );
 };
 
+/* ------------------------------------------------------------------ */
+/* Hook                                                               */
+/* ------------------------------------------------------------------ */
 export const useLiveBuses = () => useContext(LiveBusContext);
