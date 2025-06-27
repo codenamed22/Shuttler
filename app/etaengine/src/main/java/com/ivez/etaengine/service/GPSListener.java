@@ -40,6 +40,7 @@ public class GPSListener extends WebSocketClient {
         try {
             // Convert JSON string to BusPing object
             BusPing ping = objectMapper.readValue(message, BusPing.class);
+            long now = (System.currentTimeMillis()) / 1000;
 
             // Simple validation
             if (ping.getBusId() != null && ping.getLat() != 0) {
@@ -52,6 +53,16 @@ public class GPSListener extends WebSocketClient {
 
                 List<Coordinate> routeCoords = route.getCoordinates();
                 List<Stop> stops = route.getStops();
+
+                if(!busStateTracker.isNewer(ping)){
+                    System.out.println("Stale ping ignored for bus: " + ping.getBusId());
+                    return;
+                }
+                System.out.println("Time Diff : " + (now - ping.getTimestamp()));
+                if ((now - ping.getTimestamp()) > 2 * 60 * 1000) {
+                    System.out.println("Ping too delayed, skipping: " + ping.getBusId());
+                    return;
+                }
 
                 busStateTracker.updateBusState(ping); // Track bus
                 etaPredictor.updateEta(busStateTracker.getState(ping.getBusId())); // Predict ETA
