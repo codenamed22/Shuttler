@@ -75,6 +75,7 @@ public class EtaPredictor {
 
             if(busState.getArrivedStops().contains(stop.getStopId())){
                 newPredictions.add(new EtaPrediction(busState.getBusId(), stop.getStopId(), -1, now));
+                continue;
             }
 
             int stopSegment = stop.getSegmentIndex();

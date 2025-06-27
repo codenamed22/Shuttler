@@ -9,6 +9,8 @@ class Bus:
         self.route_id = None
         self.route_points = []
         self.stops = []
+        self.current_points = ()
+        self.last_stop_id = None
         
         self.current_index = 0      # index on the route
         self.speed_kmph = speed_kmph
@@ -19,6 +21,7 @@ class Bus:
         
         self.direction = 1  # 1 = forward, -1 = backward
         self.end_pause_until = 0  # pause after reaching route end
+        self.current_points = self.route_points[0]
     
     def _load_route(self, path):
         with open(path, 'r') as file:
@@ -38,9 +41,11 @@ class Bus:
         now = time.time()
         
         if now < self.end_pause_until:
+            print("In end pause until:", self.end_pause_until)
             return self._format_ping(self.route_points[self.current_index], now)
         
         if now < self.pause_until:
+            print("Pausing until:", self.pause_until)
             return self._format_ping(self.route_points[self.current_index], now)
         
          # Simulate traffic variation
@@ -51,21 +56,25 @@ class Bus:
         
         route_len = len(self.route_points)
         while distance_m > 0:
+            print(f"Current index: {self.current_index}, Distance to cover: {distance_m:.2f}, Speed: {self.speed_kmph:.2f} km/h, Direction: {self.direction}")
             next_index = self.current_index + self.direction
 
             if 0 <= next_index < route_len:
-                curr = self.route_points[self.current_index]
+                curr = self.current_points
                 nxt = self.route_points[next_index]
                 seg_dist = self._haversine(curr, nxt)
 
                 if seg_dist <= distance_m:
                     distance_m -= seg_dist
                     self.current_index = next_index
+                    self.current_points = self.route_points[next_index]
                 else:
                     frac = distance_m / seg_dist
                     lat = curr[0] + frac * (nxt[0] - curr[0])
                     lon = curr[1] + frac * (nxt[1] - curr[1])
                     simulated_point = (lat, lon)
+                    print(f"Simulated point: {simulated_point}")
+                    self.current_points = simulated_point
                     break
             else:
                 # Reached end or beginning of the route
@@ -73,13 +82,16 @@ class Bus:
                 self.direction *= -1  # reverse direction
                 break
         else:
-            simulated_point = self.route_points[self.current_index]
+            simulated_point = self.route_points[self.current_points]
             
         # Check for stop pause
         for stop in self.stops:
             stop_point = (stop['lat'], stop['lon'])
-            if self._haversine(simulated_point, stop_point) < 20:  # within 20 meters
-                self.pause_until = now + random.uniform(5, 10)
+            stop_id = stop['stopId']
+            if self._haversine(simulated_point, stop_point) < 20 and stop_id != self.last_stop_id:  # within
+                self.pause_until = now + random.uniform(30, 120)
+                self.last_stop_id = stop_id
+                print(f"Pausing at stop {stop_id} for {self.pause_until - now:.2f} seconds")
                 break
         
         # Add noise
