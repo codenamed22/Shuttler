@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Search, Filter, MapPin } from 'lucide-react';
 import { BusCard } from '../components/BusCard';
-import { useLiveBuses } from '../context/LiveBusContext';
+import { useLiveBuses } from "../context/LiveBusContext";
+import { Bus } from "../types";
 import { Link } from "react-router-dom";
 
 // (If you have a Bus interface, you can still import it here, e.g.)
@@ -13,9 +14,9 @@ export const HomePage: React.FC = () => {
     useState<'all' | 'active' | 'delayed' | 'completed'>('all');
 
   /* ---- Live fleet coming from WebSocket ---- */
-  const busesObj = useLiveBuses();          // { [busId]: Bus }
-  const buses    = Object.values(busesObj); // → Bus[]
-
+ 
+const busesObj = useLiveBuses();
+const buses = Object.values<Bus>(busesObj);   // no “unknown” warning
   /* ---- Search + status filtering ---- */
   const filteredBuses = buses.filter((bus) => {
     const matchesSearch =

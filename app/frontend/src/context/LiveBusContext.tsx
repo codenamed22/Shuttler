@@ -11,42 +11,40 @@ import { Bus, BusStop } from "../types";
 import { BUS_ROUTE_MAP } from "../constants/routeMap";
 import { getDistance } from "geolib";
 
-/* -------------------------------------------------------------------------- */
-/* Context                                                                    */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Context setup                                                      */
+/* ------------------------------------------------------------------ */
 
 type BusMap = Record<string, Bus>;
 const LiveBusContext = createContext<BusMap>({});
 
-const MIN_MOVE_METERS = 15; // ignore jitter < 15 m
+const MIN_MOVE_METERS = 15; // ignore GPS jitter < 15 m
 
-/* -------------------------------------------------------------------------- */
-/* Provider                                                                   */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Provider                                                           */
+/* ------------------------------------------------------------------ */
 
 export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [buses, setBuses] = useState<BusMap>({});
-  const downloadedRoutes = useRef<Set<string>>(new Set());
+  const loadedRoutes = useRef<Set<string>>(new Set()); // track which busIds have a route
 
-  /* ── GPS WebSocket ─────────────────────────────────────────────────────── */
+  /* 1 ▪ GPS WebSocket (port 8765) ---------------------------------------- */
   useEffect(() => {
     const gps = new GPSSocket();
 
-    gps.onPing(async (ping: PingMessage) => {
-      /* guard invalid coords */
+    gps.onPing((ping: PingMessage) => {
       if (!Number.isFinite(ping.lat) || !Number.isFinite(ping.lon)) return;
 
-      /* -------- live update -------- */
       setBuses((prev) => {
         const existing = prev[ping.busId];
 
-        // filter jitter
+        // distance gate
         if (existing?.currentLocation) {
           const dist = getDistance(
             { latitude: existing.currentLocation[0], longitude: existing.currentLocation[1] },
-            { latitude: ping.lat, longitude: ping.lon }
+            { latitude: ping.lat, longitude: ping.lon },
           );
           if (dist < MIN_MOVE_METERS) return prev;
         }
@@ -83,67 +81,147 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
           },
         };
       });
-
-      /* -------- lazy-load route (once per bus) -------- */
-      if (downloadedRoutes.current.has(ping.busId)) return;
-      downloadedRoutes.current.add(ping.busId);
-
-      try {
-        const routeFile = BUS_ROUTE_MAP[ping.busId] ?? ping.busId;
-        const res = await fetch(`http://localhost:8000/route_${routeFile}.geojson`);
-        if (!res.ok) {
-          console.error("404 route file:", res.url);
-          return;
-        }
-
-        const geo = await res.json();
-        const feature = geo.features[0];
-
-        const route: [number, number][] = feature.geometry.coordinates.map(
-          ([lon, lat]: [number, number]) => [lat, lon]
-        );
-
-        const stopsRaw = feature.properties.stops as {
-          stopId: string;
-          name: string;
-          lat: number;
-          lon: number;
-        }[];
-
-        const stops: BusStop[] = stopsRaw.map((s) => ({
-          id: s.stopId,
-          name: s.name,
-          coordinates: [s.lat, s.lon],
-          completed: ping.arrivedStops?.includes(s.stopId) ?? false,
-          estimatedTime: undefined,
-          departureTime: undefined,
-        }));
-
-        setBuses((prev) => ({
-          ...prev,
-          [ping.busId]: {
-            ...prev[ping.busId],
-            route,
-            stops,
-            origin: stops[0]?.name ?? "–",
-            destination: stops.at(-1)?.name ?? "–",
-          },
-        }));
-      } catch (err) {
-        console.error("Failed to fetch route file:", err);
-      }
     });
 
     return () => gps.close();
   }, []);
+
+  /* 2 ▪ Lazy-load route GeoJSON (once per bus) --------------------------- */
+  useEffect(() => {
+    (async () => {
+      for (const busId of Object.keys(buses)) {
+        if (loadedRoutes.current.has(busId)) continue;
+        loadedRoutes.current.add(busId);
+
+        try {
+          const file = BUS_ROUTE_MAP[busId] ?? busId;
+          const res = await fetch(`http://localhost:8000/route_${file}.geojson`);
+          if (!res.ok) continue;
+
+          const geo = await res.json();
+          const coords = geo.features[0].geometry.coordinates;
+          const route: [number, number][] = coords.map(
+            ([lon, lat]: [number, number]) => [lat, lon],
+          );
+
+          const stopsRaw = geo.features[0].properties.stops as {
+            stopId: string;
+            name: string;
+            lat: number;
+            lon: number;
+          }[];
+
+          setBuses((prev) => ({
+            ...prev,
+            [busId]: {
+              ...prev[busId],
+              route,
+              origin: stopsRaw[0]?.name ?? "–",
+              destination: stopsRaw.at(-1)?.name ?? "–",
+              stops: stopsRaw.map((s): BusStop => ({
+                id: s.stopId,
+                name: s.name,
+                coordinates: [s.lat, s.lon],
+                completed: false,
+                estimatedTime: undefined,
+                departureTime: undefined,
+              })),
+            },
+          }));
+        } catch (e) {
+          console.error("route load failed", e);
+        }
+      }
+    })();
+  }, [buses]);
+
+  /* 3 ▪ ETA WebSockets (port 8080) – one per bus ------------------------- */
+  const etaSockets = useRef<Record<string, WebSocket>>({});
+
+  useEffect(() => {
+    Object.keys(buses).forEach((busId) => {
+      if (etaSockets.current[busId]) return; // already open
+
+      const bus = buses[busId];
+      if (!bus || bus.stops.length === 0) return; // wait until stops loaded
+
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${proto}://localhost:8080/ws/eta?busId=${busId}`);
+      etaSockets.current[busId] = ws;
+
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+
+          if ("arrivedStops" in data) {
+            const { arrivedStops, arrivalTimes } = data as {
+              arrivedStops: string[];
+              arrivalTimes: Record<string, number>;
+            };
+
+            setBuses((prev) => ({
+              ...prev,
+              [busId]: {
+                ...prev[busId],
+                stops: prev[busId].stops.map((st) =>
+                  arrivedStops.includes(st.id)
+                    ? {
+                        ...st,
+                        completed: true,
+                        departureTime: arrivalTimes[st.id],
+                        estimatedTime: undefined,
+                      }
+                    : st,
+                ),
+              },
+            }));
+            return;
+          }
+
+          if ("etaPerStop" in data) {
+            const { etaPerStop } = data as {
+              etaPerStop: Record<string, number>;
+            };
+
+            setBuses((prev) => ({
+              ...prev,
+              [busId]: {
+                ...prev[busId],
+                stops: prev[busId].stops.map((st) =>
+                  etaPerStop[st.id]
+                    ? { ...st, estimatedTime: etaPerStop[st.id] }
+                    : st,
+                ),
+              },
+            }));
+          }
+        } catch {
+          /* ignore malformed frames */
+        }
+      };
+
+      ws.onclose = () => {
+        delete etaSockets.current[busId];
+        setTimeout(() => {
+          if (!etaSockets.current[busId]) {
+            setBuses((b) => ({ ...b })); // trigger effect to retry
+          }
+        }, 2000);
+      };
+    });
+
+    return () => {
+      Object.values(etaSockets.current).forEach((ws) => ws.close());
+    };
+  }, [buses]);
 
   return (
     <LiveBusContext.Provider value={buses}>{children}</LiveBusContext.Provider>
   );
 };
 
-/* -------------------------------------------------------------------------- */
-/* Hook                                                                       */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Hook                                                               */
+/* ------------------------------------------------------------------ */
 
 export const useLiveBuses = () => useContext(LiveBusContext);

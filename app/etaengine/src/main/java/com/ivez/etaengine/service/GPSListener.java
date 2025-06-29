@@ -15,20 +15,17 @@ public class GPSListener extends WebSocketClient {
 
     private final BusStateTracker     busStateTracker;
     private final EtaPredictor        etaPredictor;
-    private final Routes              routes;
     private final EtaWebSocketHandler etaWs;
     private final ObjectMapper        objectMapper = new ObjectMapper();
 
     public GPSListener(
             BusStateTracker tracker,
             EtaPredictor predictor,
-            Routes routes,
             EtaWebSocketHandler etaWs
     ) {
         super(URI.create("ws://localhost:8765"));
         this.busStateTracker = tracker;
         this.etaPredictor    = predictor;
-        this.routes          = routes;
         this.etaWs           = etaWs;
     }
 
@@ -59,7 +56,8 @@ public class GPSListener extends WebSocketClient {
                     "lat",          state.getLat(),          // already smoothed
                     "lon",          state.getLon(),
                     "timestamp",    state.getLastUpdated(),
-                    "arrivedStops", state.getArrivedStops()  // HashSet<String>
+                    "arrivedStops", state.getArrivedStops(),  // HashSet<String>
+                    "arrivalTimes", state.getArrivalTimes()
             );
 
             etaWs.broadcastEtaUpdate(objectMapper.writeValueAsString(view));

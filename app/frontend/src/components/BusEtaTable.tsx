@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { format, parseISO } from "date-fns";
-import { useEtaSocket } from "../hooks/useEtaSocket";
+import { format } from "date-fns";
+import {
+  useEtaSocket,
+  ArrivedMsg,
+  PredictionMsg,
+} from "../hooks/useEtaSocket";
+import { toMillis } from "../utils/time";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
+/* ─────────── types ─────────── */
 interface BusMeta {
   id: string;
   name: string;
@@ -14,18 +16,15 @@ interface BusMeta {
 interface StopEta {
   stopId: string;
   stopName: string;
-  actualArrival: string | null;
+  actualArrival: number | string | null;
   predictions: {
-    "10": string | null;
-    "20": string | null;
-    "30": string | null;
+    "10": number | string | null;
+    "20": number | string | null;
+    "30": number | string | null;
   };
 }
 
-// ---------------------------------------------------------------------------
-// API Setup
-// ---------------------------------------------------------------------------
-
+/* ─────────── helpers ─────────── */
 const API_BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
 
 const fetchBuses = async (): Promise<BusMeta[]> => {
@@ -46,18 +45,12 @@ const fetchEtaByBusAndDay = async (
   return res.json();
 };
 
-// ---------------------------------------------------------------------------
-// Utils
-// ---------------------------------------------------------------------------
-
-const fmtTime = (iso: string | null) =>
-  iso ? format(parseISO(iso), "HH:mm") : "—";
+const fmtTime = (t: number | string | null) =>
+  t ? format(new Date(toMillis(t)), "HH:mm") : "—";
 
 const msgForPending = (mins: 10 | 20 | 30) => `No data ${mins} min before`;
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+/* ─────────── component ─────────── */
 
 const BusEtaTable: React.FC = () => {
   const [busList, setBusList] = useState<BusMeta[]>([]);
@@ -69,14 +62,12 @@ const BusEtaTable: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch bus list on mount
   useEffect(() => {
     fetchBuses()
       .then(setBusList)
       .catch((err) => setError(err.message));
   }, []);
 
-  // Load ETA data
   const loadEtas = useCallback(() => {
     if (!selectedBus) return;
     setIsLoading(true);
@@ -86,30 +77,39 @@ const BusEtaTable: React.FC = () => {
       .finally(() => setIsLoading(false));
   }, [selectedBus, selectedDate]);
 
-  // Load initially and poll every 5 min
   useEffect(() => {
     loadEtas();
-    const interval = setInterval(loadEtas, 300_000);
+    const interval = setInterval(loadEtas, 300_000); // 5 minutes
     return () => clearInterval(interval);
   }, [loadEtas]);
 
-  // Live updates via WebSocket
-  useEtaSocket(selectedBus, (msg) => {
+  const handleArrived = useCallback((msg: ArrivedMsg) => {
     setEtas((prev) =>
       prev.map((row) =>
-        row.stopId === msg.stopId
+        msg.arrivedStops.includes(row.stopId)
+          ? { ...row, actualArrival: msg.arrivalTimes[row.stopId] }
+          : row
+      )
+    );
+  }, []);
+
+  const handlePrediction = useCallback((msg: PredictionMsg) => {
+    setEtas((prev) =>
+      prev.map((row) =>
+        msg.etaPerStop[row.stopId]
           ? {
               ...row,
-              actualArrival: msg.actualArrival,
               predictions: {
                 ...row.predictions,
-                ...msg.predictions,
+                "10": msg.etaPerStop[row.stopId],
               },
             }
           : row
       )
     );
-  });
+  }, []);
+
+  useEtaSocket(selectedBus, handleArrived, handlePrediction);
 
   return (
     <div className="flex flex-col gap-4">
@@ -182,17 +182,17 @@ const BusEtaTable: React.FC = () => {
               </tr>
             )}
             {etas.map((s) => {
-              const isCompleted = Boolean(s.actualArrival);
+              const done = Boolean(s.actualArrival);
               return (
                 <tr
                   key={s.stopId}
-                  className={isCompleted ? "bg-gray-100 text-gray-500" : ""}
+                  className={done ? "bg-gray-100 text-gray-500" : ""}
                 >
                   <td className="whitespace-nowrap px-4 py-2 text-sm font-medium">
                     {s.stopName}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 text-sm">
-                    {isCompleted ? fmtTime(s.actualArrival) : "—"}
+                    {done ? fmtTime(s.actualArrival) : "—"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 text-sm">
                     {s.predictions["10"]
