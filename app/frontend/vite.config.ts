@@ -1,12 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  server: {
-    proxy: {
-      // any request the frontend makes to /routes/... is tunneled to 8000
-      '/routes': 'http://localhost:8000'
-    }
-  }
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),   //  <- the magic
+    },
+  },
 });

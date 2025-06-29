@@ -59,7 +59,7 @@ public class GPSListener extends WebSocketClient {
                     "arrivedStops", state.getArrivedStops(),  // HashSet<String>
                     "arrivalTimes", state.getArrivalTimes()
             );
-
+            System.out.println("GPSListener sending view JSON: " + objectMapper.writeValueAsString(view));
             etaWs.broadcastEtaUpdate(objectMapper.writeValueAsString(view));
 
         } catch (Exception e) {
