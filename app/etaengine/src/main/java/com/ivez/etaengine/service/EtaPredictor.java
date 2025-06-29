@@ -124,6 +124,7 @@ public class EtaPredictor {
             etaUpdate.setEtaPerStop(temp);
             ObjectMapper mapper = new ObjectMapper();
             String json = mapper.writeValueAsString(etaUpdate);
+            System.out.println("EtaPredictor sending ETA JSON: " + json);
             etaWebSocketHandler.broadcastEtaUpdate(json);
 
 

@@ -6,7 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Data
 @NoArgsConstructor
@@ -18,6 +20,10 @@ public class BusState {
     private double speed; // in m/s
     private int segmentIndex;
     private Set<String> arrivedStops = new HashSet<>();
+
+    /* 🆕 actual-arrival timestamps per stopId */
+    private Map<String, Long> arrivalTimes = new ConcurrentHashMap<>();
+    public Map<String, Long> getArrivalTimes() { return arrivalTimes; }
 
     @JsonProperty("timestamp")
     private long lastUpdated;

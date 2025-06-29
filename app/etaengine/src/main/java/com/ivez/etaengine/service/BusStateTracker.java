@@ -23,7 +23,7 @@ public class BusStateTracker {
 
     private final Routes routes;
 
-    public BusStateTracker(Routes routes){
+    public BusStateTracker(Routes routes) {
         this.routes = routes;
     }
 
@@ -32,10 +32,7 @@ public class BusStateTracker {
         BusState previous = stateMap.get(ping.getBusId());
         System.out.println("Bus State : " + previous);
 
-
-
         RouteData route = routes.getRoute(ping.getBusId());
-
 
         if (route == null) {
             System.err.println("Unknown route for busId: " + ping.getBusId());
@@ -45,31 +42,36 @@ public class BusStateTracker {
         double speed = 0;
         int segment = findClosestSegment(ping.getLat(), ping.getLon(), route.getCoordinates());
 
-
         if (previous != null) {
 
-            for(Stop stop : route.getStops()){
-                if(previous.getArrivedStops().contains(stop.getStopId()))
+            for (Stop stop : route.getStops()) {
+                if (previous.getArrivedStops().contains(stop.getStopId()))
                     continue;
-                double dist = haversine(ping.getLat(), ping.getLon(), stop.getLat(), stop.getLon());
-                if (dist <= 50.0) {
+
+                double dist = haversine(
+                        ping.getLat(), ping.getLon(),
+                        stop.getLat(), stop.getLon());
+
+                if (dist <= 50.0 && !previous.getArrivalTimes().containsKey(stop.getStopId())) {
                     System.out.println("Bus " + ping.getBusId() + " arrived at stop " + stop.getName());
+
                     previous.getArrivedStops().add(stop.getStopId());
+                    /* store timestamp in **milliseconds** */
+                    previous.getArrivalTimes().put(stop.getStopId(), ping.getTimestamp() * 1000);
                 }
             }
 
             System.out.println("Time diff : " + (ping.getTimestamp() - previous.getLastUpdated()));
-            if(ping.getTimestamp() - previous.getLastUpdated() < minGapMillis)
+            if (ping.getTimestamp() - previous.getLastUpdated() < minGapMillis)
                 return;
             // Calculate time difference in seconds
-            double timeDiff = (ping.getTimestamp() - previous.getLastUpdated()) ;
+            double timeDiff = (ping.getTimestamp() - previous.getLastUpdated());
 
             if (timeDiff > 0) {
                 // Estimate distance between old and new point
                 double distance = haversine(
                         previous.getLat(), previous.getLon(),
-                        ping.getLat(), ping.getLon()
-                );
+                        ping.getLat(), ping.getLon());
                 System.out.println("Distance :" + distance + " Time : " + timeDiff);
                 // Speed = distance / time (m/s)
                 speed = distance / timeDiff;
@@ -84,8 +86,8 @@ public class BusStateTracker {
                 speed,
                 segment,
                 previous == null ? new HashSet<String>() : previous.getArrivedStops(),
-                ping.getTimestamp()
-        );
+                previous == null ? new ConcurrentHashMap<String, Long>() : previous.getArrivalTimes(),
+                ping.getTimestamp());
 
         stateMap.put(ping.getBusId(), newState);
     }
@@ -119,8 +121,8 @@ public class BusStateTracker {
     }
 
     private double pointToSegmentDistance(double px, double py,
-                                          double ax, double ay,
-                                          double bx, double by) {
+            double ax, double ay,
+            double bx, double by) {
         double dx = bx - ax;
         double dy = by - ay;
 
@@ -137,7 +139,7 @@ public class BusStateTracker {
         return haversine(px, py, projX, projY);
     }
 
-    public boolean isNewer(BusPing ping){
+    public boolean isNewer(BusPing ping) {
         BusState latest = stateMap.get(ping.getBusId());
         return latest == null || ping.getTimestamp() > latest.getLastUpdated();
     }

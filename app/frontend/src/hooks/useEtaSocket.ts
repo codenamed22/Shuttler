@@ -1,49 +1,60 @@
 import { useEffect, useRef } from "react";
 
-interface EtaMsg {
+/* ─────────── message shapes from /ws/eta ─────────── */
+
+export interface ArrivedMsg {
   busId: string;
-  stopId: string;
-  actualArrival: string | null;
-  predictions: { "10": string | null; "20": string | null; "30": string | null };
+  arrivedStops: string[];                 // e.g. ["stop_kc_1"]
+  arrivalTimes: Record<string, number>;   // ms since epoch
 }
 
-type Listener = (msg: EtaMsg) => void;
+export interface PredictionMsg {
+  busId: string;
+  etaPerStop: Record<string, number>;     // ms since epoch or -1
+}
+
+/* ─────────── hook ─────────── */
+
+type ArrivedHandler    = (msg: ArrivedMsg)    => void;
+type PredictionHandler = (msg: PredictionMsg) => void;
 
 const WS_BASE =
-  (import.meta.env.VITE_WS_BASE as string | undefined) ?? "ws://localhost:8080";
+  (import.meta.env.VITE_WS_BASE as string | undefined) ??
+  "ws://localhost:8080";
 
-export function useEtaSocket(busId: string | undefined, onMessage: Listener) {
-  const wsRef = useRef<WebSocket | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+/**
+ * Opens ONE WebSocket to /ws/eta for the given busId.
+ *  • onArrived     → called for arrivalTimes / arrivedStops frames
+ *  • onPrediction  → called for etaPerStop frames
+ */
+export function useEtaSocket(
+  busId: string | undefined,
+  onArrived: ArrivedHandler,
+  onPrediction: PredictionHandler
+) {
+  const wsRef = useRef<WebSocket>();
 
   useEffect(() => {
-    /* connect once; filter later */
-    const connect = () => {
-      const ws = new WebSocket(`${WS_BASE}/ws/eta`);
-      wsRef.current = ws;
+    /* no bus selected → nothing to do */
+    if (!busId) return;
 
-      ws.addEventListener("message", (ev) => {
-        try {
-          const data: EtaMsg = JSON.parse(ev.data);
-          if (!busId || data.busId === busId) onMessage(data);
-        } catch {
-          console.warn("Bad ETA payload:", ev.data);
+    const ws = new WebSocket(`${WS_BASE}/ws/eta?busId=${encodeURIComponent(busId)}`);
+    wsRef.current = ws;
+
+    ws.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if ("etaPerStop" in data) {
+          onPrediction(data as PredictionMsg);
+        } else if ("arrivedStops" in data) {
+          onArrived(data as ArrivedMsg);
         }
-      });
-
-      ws.addEventListener("close", () => {
-        console.warn("ETA socket closed. Reconnecting in 2 s…");
-        timerRef.current = setTimeout(connect, 2000);
-      });
-
-      ws.addEventListener("error", () => ws.close());
+      } catch (_) {
+        /* ignore bad payloads */
+      }
     };
 
-    connect();
-
-    return () => {
-      timerRef.current && clearTimeout(timerRef.current);
-      wsRef.current?.close();
-    };
-  }, [busId, onMessage]);
+    /* cleanup when busId changes or component unmounts */
+    return () => ws.close();
+  }, [busId, onArrived, onPrediction]);
 }
