@@ -57,7 +57,8 @@ public class GPSListener extends WebSocketClient {
                     "lon",          state.getLon(),
                     "timestamp",    state.getLastUpdated(),
                     "arrivedStops", state.getArrivedStops(),  // HashSet<String>
-                    "arrivalTimes", state.getArrivalTimes()
+                    "arrivalTimes", state.getArrivalTimes(),
+                    "occupancy", ping.getOccupancy()
             );
             System.out.println("GPSListener sending view JSON: " + objectMapper.writeValueAsString(view));
             etaWs.broadcastEtaUpdate(objectMapper.writeValueAsString(view));
