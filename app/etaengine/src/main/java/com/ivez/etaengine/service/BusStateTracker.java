@@ -1,10 +1,14 @@
 package com.ivez.etaengine.service;
 
+import com.ivez.etaengine.entity.StopArrival;
 import com.ivez.etaengine.model.*;
+import com.ivez.etaengine.repository.StopArrivalRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -22,9 +26,12 @@ public class BusStateTracker {
     private final long minGapMillis = 3;
 
     private final Routes routes;
+    private final StopArrivalRepository arrivalRepository;
 
-    public BusStateTracker(Routes routes) {
+    public BusStateTracker(Routes routes,
+                           StopArrivalRepository arrivalRepository) {
         this.routes = routes;
+        this.arrivalRepository = arrivalRepository;
     }
 
     public void updateBusState(BusPing ping) {
@@ -56,6 +63,22 @@ public class BusStateTracker {
                     System.out.println("Bus " + ping.getBusId() + " arrived at stop " + stop.getName());
 
                     previous.getArrivedStops().add(stop.getStopId());
+
+
+
+                    StopArrival arrival = new StopArrival();
+                    arrival.setBusId(ping.getBusId());
+                    arrival.setStopId(stop.getStopId());
+                    arrival.setStopName(stop.getName());
+                    // Convert ping timestamp (seconds) to LocalDateTime
+                    LocalDateTime arrivalTime = Instant.ofEpochMilli(ping.getTimestamp() * 1000)
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDateTime();
+                    arrival.setArrivalTime(arrivalTime);
+                    arrival.setCreatedAt(LocalDateTime.now());
+                    arrival.setDate(arrivalTime.toLocalDate());
+                    arrivalRepository.save(arrival);
+                    System.out.println("Stop event stored in DB");
                     /* store timestamp in **milliseconds** */
                     previous.getArrivalTimes().put(stop.getStopId(), ping.getTimestamp() * 1000);
                 }

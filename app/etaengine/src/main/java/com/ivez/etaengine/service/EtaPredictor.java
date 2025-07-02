@@ -3,6 +3,8 @@ package com.ivez.etaengine.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivez.etaengine.model.*;
+import com.ivez.etaengine.repository.EtaPredictionRepository;
+import com.ivez.etaengine.repository.StopArrivalRepository;
 import com.ivez.etaengine.util.GeoUtils;
 import com.ivez.etaengine.util.KalmanFilter;
 import com.ivez.etaengine.ws.EtaWebSocketHandler;
@@ -10,6 +12,8 @@ import org.springframework.stereotype.Service;
 
 import java.sql.SQLOutput;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -25,6 +29,8 @@ public class EtaPredictor {
     //private final List<Stop> stops;
     private final Routes routes;
     private final EtaWebSocketHandler etaWebSocketHandler;
+    private final EtaPredictionRepository predictionRepository;
+    //private final StopArrivalRepository arrivalRepository;
 
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss")
             .withZone(ZoneId.systemDefault());
@@ -35,9 +41,12 @@ public class EtaPredictor {
     private static final int MIN_ETA_UPDATE = 5000; // 5 secs
     //private static final int MAX_ETA_JUMP_SEC = 3000; // 5 minutes
 
-    public EtaPredictor(Routes routes, EtaWebSocketHandler etaWebSocketHandler) {
+    public EtaPredictor(Routes routes, EtaWebSocketHandler etaWebSocketHandler,
+                        EtaPredictionRepository predictionRepository) {
         this.routes = routes;
         this.etaWebSocketHandler = etaWebSocketHandler;
+        this.predictionRepository = predictionRepository;
+        //this.arrivalRepository = arrivalRepository;
     }
 
     public void updateEta(BusState busState) throws JsonProcessingException {
@@ -109,6 +118,18 @@ public class EtaPredictor {
 
             newPredictions.add(new EtaPrediction(busState.getBusId(), stop.getStopId(), etaMillis, now));
             System.out.printf("🕐 ETA → %-18s (%s): %s (filtered)%n", stop.getName(), stop.getStopId(), etaStr);
+
+            com.ivez.etaengine.entity.EtaPrediction prediction = new com.ivez.etaengine.entity.EtaPrediction();
+            prediction.setBusId(busState.getBusId());
+            prediction.setStopId(stop.getStopId());
+            prediction.setStopName(stop.getName());
+            LocalDateTime predictedTime = Instant.ofEpochMilli(etaMillis)
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDateTime();
+            prediction.setPredictedArrivalTime(predictedTime);
+            prediction.setCreatedAt(LocalDateTime.now());
+            prediction.setDate(predictedTime.toLocalDate());
+            predictionRepository.save(prediction);
         }
 
         if (!newPredictions.isEmpty()) {
