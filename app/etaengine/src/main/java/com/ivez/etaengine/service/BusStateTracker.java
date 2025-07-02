@@ -65,6 +65,7 @@ public class BusStateTracker {
                     previous.getArrivedStops().add(stop.getStopId());
 
 
+
                     StopArrival arrival = new StopArrival();
                     arrival.setBusId(ping.getBusId());
                     arrival.setStopId(stop.getStopId());
@@ -78,7 +79,6 @@ public class BusStateTracker {
                     arrival.setDate(arrivalTime.toLocalDate());
                     arrivalRepository.save(arrival);
                     System.out.println("Stop event stored in DB");
-
                     /* store timestamp in **milliseconds** */
                     previous.getArrivalTimes().put(stop.getStopId(), ping.getTimestamp() * 1000);
                 }
