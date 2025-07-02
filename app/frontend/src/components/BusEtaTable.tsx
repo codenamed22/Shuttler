@@ -5,7 +5,6 @@ import { toMillis } from "../utils/time";
 /* ─────────── types ─────────── */
 interface BusMeta {
   id: string;
-  name: string;
 }
 
 /**
@@ -26,11 +25,12 @@ interface StopEta {
 
 /* ─────────── helpers ─────────── */
 // Point this straight at Spring. Can be overridden via VITE_API_BASE.
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "http://localhost:8080/api").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE ?? "http://localhost:8080/api/dashboard").replace(/\/$/, "");
 
 const fetchBuses = async (): Promise<BusMeta[]> => {
   const res = await fetch(`${API_BASE}/buses`);
   if (!res.ok) throw new Error("Failed to fetch bus list");
+  // console.log(res.json())
   return res.json();
 };
 
@@ -39,7 +39,7 @@ const fetchEtaByBusAndDay = async (
   date: string
 ): Promise<StopEta[]> => {
   if (!busId) return [];
-  const res = await fetch(`${API_BASE}/dashboard/bus/${encodeURIComponent(busId)}/date/${date}`);
+  const res = await fetch(`${API_BASE}/bus/${encodeURIComponent(busId)}/date/${date}`);
   if (!res.ok) throw new Error("Failed to fetch ETA data");
   const raw = await res.json();
   return raw.map((row: any) => ({
@@ -59,7 +59,7 @@ const msgForPending = (mins: 10 | 5 | 2) => `No data ${mins} min before`;
 
 /* ─────────── component ─────────── */
 const BusEtaTable: React.FC = () => {
-  const [busList, setBusList] = useState<BusMeta[]>([]);
+  const [busList, setBusList] = useState<string[]>([]);
   const [selectedBus, setSelectedBus] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [etas, setEtas] = useState<StopEta[]>([]);
@@ -75,6 +75,7 @@ const BusEtaTable: React.FC = () => {
   const loadEtas = useCallback(() => {
     if (!selectedBus) return;
     setIsLoading(true);
+    console.log(`BusList: ${busList}`)
     fetchEtaByBusAndDay(selectedBus, selectedDate)
       .then(setEtas)
       .catch((err) => setError(err.message))
@@ -87,6 +88,7 @@ const BusEtaTable: React.FC = () => {
     return () => clearInterval(id);
   }, [loadEtas]);
 
+  console.log("busList in BusEtaTable:", busList);
   return (
     <div className="flex flex-col gap-4">
       {/* Filters */}
@@ -102,8 +104,8 @@ const BusEtaTable: React.FC = () => {
               Select bus
             </option>
             {busList.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
+              <option key={b} value={b}>
+                {b}
               </option>
             ))}
           </select>
