@@ -1,10 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
-import {
-  useEtaSocket,
-  ArrivedMsg,
-  PredictionMsg,
-} from "../hooks/useEtaSocket";
 import { toMillis } from "../utils/time";
 
 /* ─────────── types ─────────── */
@@ -13,19 +8,25 @@ interface BusMeta {
   name: string;
 }
 
+/**
+ * One row of the ETA dashboard.
+ * – `actualArrival` is the ground‑truth timestamp when the bus checked‑in.
+ * – `predictions` holds the three snapshots we capture 10/5/2 min **before** that arrival.
+ */
 interface StopEta {
   stopId: string;
   stopName: string;
   actualArrival: number | string | null;
   predictions: {
     "10": number | string | null;
-    "20": number | string | null;
-    "30": number | string | null;
+    "5": number | string | null;
+    "2": number | string | null;
   };
 }
 
 /* ─────────── helpers ─────────── */
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
+// Point this straight at Spring. Can be overridden via VITE_API_BASE.
+const API_BASE = (import.meta.env.VITE_API_BASE ?? "http://localhost:8080/api").replace(/\/$/, "");
 
 const fetchBuses = async (): Promise<BusMeta[]> => {
   const res = await fetch(`${API_BASE}/buses`);
@@ -38,36 +39,39 @@ const fetchEtaByBusAndDay = async (
   date: string
 ): Promise<StopEta[]> => {
   if (!busId) return [];
-  const res = await fetch(
-    `${API_BASE}/eta?busId=${encodeURIComponent(busId)}&date=${date}`
-  );
+  const res = await fetch(`${API_BASE}/dashboard/bus/${encodeURIComponent(busId)}/date/${date}`);
   if (!res.ok) throw new Error("Failed to fetch ETA data");
-  return res.json();
+  const raw = await res.json();
+  return raw.map((row: any) => ({
+    stopId: row.stopId,
+    stopName: row.stopName,
+    actualArrival: row.actualArrival,
+    predictions: {
+      "10": row.eta10minBefore,
+      "5": row.eta5minBefore,
+      "2": row.eta2minBefore,
+    },
+  }));
 };
 
-const fmtTime = (t: number | string | null) =>
-  t ? format(new Date(toMillis(t)), "HH:mm") : "—";
-
-const msgForPending = (mins: 10 | 20 | 30) => `No data ${mins} min before`;
+const fmtTime = (t: number | string | null) => (t ? format(new Date(toMillis(t)), "HH:mm") : "—");
+const msgForPending = (mins: 10 | 5 | 2) => `No data ${mins} min before`;
 
 /* ─────────── component ─────────── */
-
 const BusEtaTable: React.FC = () => {
   const [busList, setBusList] = useState<BusMeta[]>([]);
   const [selectedBus, setSelectedBus] = useState<string>("");
-  const [selectedDate, setSelectedDate] = useState<string>(
-    format(new Date(), "yyyy-MM-dd")
-  );
+  const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [etas, setEtas] = useState<StopEta[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /* Load bus dropdown once */
   useEffect(() => {
-    fetchBuses()
-      .then(setBusList)
-      .catch((err) => setError(err.message));
+    fetchBuses().then(setBusList).catch((err) => setError(err.message));
   }, []);
 
+  /* Fetch dashboard rows – initial + every 5 min */
   const loadEtas = useCallback(() => {
     if (!selectedBus) return;
     setIsLoading(true);
@@ -79,37 +83,9 @@ const BusEtaTable: React.FC = () => {
 
   useEffect(() => {
     loadEtas();
-    const interval = setInterval(loadEtas, 300_000); // 5 minutes
-    return () => clearInterval(interval);
+    const id = setInterval(loadEtas, 300_000);
+    return () => clearInterval(id);
   }, [loadEtas]);
-
-  const handleArrived = useCallback((msg: ArrivedMsg) => {
-    setEtas((prev) =>
-      prev.map((row) =>
-        msg.arrivedStops.includes(row.stopId)
-          ? { ...row, actualArrival: msg.arrivalTimes[row.stopId] }
-          : row
-      )
-    );
-  }, []);
-
-  const handlePrediction = useCallback((msg: PredictionMsg) => {
-    setEtas((prev) =>
-      prev.map((row) =>
-        msg.etaPerStop[row.stopId]
-          ? {
-              ...row,
-              predictions: {
-                ...row.predictions,
-                "10": msg.etaPerStop[row.stopId],
-              },
-            }
-          : row
-      )
-    );
-  }, []);
-
-  useEtaSocket(selectedBus, handleArrived, handlePrediction);
 
   return (
     <div className="flex flex-col gap-4">
@@ -144,39 +120,24 @@ const BusEtaTable: React.FC = () => {
         </label>
       </div>
 
-      {error && (
-        <p className="rounded bg-red-100 p-2 text-sm text-red-800">{error}</p>
-      )}
+      {error && <p className="rounded bg-red-100 p-2 text-sm text-red-800">{error}</p>}
 
-      {/* ETA Table */}
+      {/* Table */}
       <div className="overflow-x-auto rounded shadow">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">
-                Stop
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">
-                Actual arrival
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">
-                ETA (-10 min)
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">
-                ETA (-20 min)
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">
-                ETA (-30 min)
-              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">Stop</th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">Actual arrival</th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">ETA (-10 min)</th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">ETA (-5 min)</th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">ETA (-2 min)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
             {!isLoading && etas.length === 0 && (
               <tr>
-                <td
-                  colSpan={5}
-                  className="px-4 py-3 text-center text-sm text-gray-500"
-                >
+                <td colSpan={5} className="px-4 py-3 text-center text-sm text-gray-500">
                   {selectedBus ? "No data for this day" : "Select a bus first"}
                 </td>
               </tr>
@@ -184,30 +145,17 @@ const BusEtaTable: React.FC = () => {
             {etas.map((s) => {
               const done = Boolean(s.actualArrival);
               return (
-                <tr
-                  key={s.stopId}
-                  className={done ? "bg-gray-100 text-gray-500" : ""}
-                >
-                  <td className="whitespace-nowrap px-4 py-2 text-sm font-medium">
-                    {s.stopName}
+                <tr key={s.stopId} className={done ? "bg-gray-100 text-gray-500" : ""}>
+                  <td className="whitespace-nowrap px-4 py-2 text-sm font-medium">{s.stopName}</td>
+                  <td className="whitespace-nowrap px-4 py-2 text-sm">{done ? fmtTime(s.actualArrival) : "—"}</td>
+                  <td className="whitespace-nowrap px-4 py-2 text-sm">
+                    {s.predictions["10"] ? fmtTime(s.predictions["10"]) : msgForPending(10)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 text-sm">
-                    {done ? fmtTime(s.actualArrival) : "—"}
+                    {s.predictions["5"] ? fmtTime(s.predictions["5"]) : msgForPending(5)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 text-sm">
-                    {s.predictions["10"]
-                      ? fmtTime(s.predictions["10"])
-                      : msgForPending(10)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-sm">
-                    {s.predictions["20"]
-                      ? fmtTime(s.predictions["20"])
-                      : msgForPending(20)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-sm">
-                    {s.predictions["30"]
-                      ? fmtTime(s.predictions["30"])
-                      : msgForPending(30)}
+                    {s.predictions["2"] ? fmtTime(s.predictions["2"]) : msgForPending(2)}
                   </td>
                 </tr>
               );

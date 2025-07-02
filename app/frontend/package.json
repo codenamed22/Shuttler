@@ -22,6 +22,7 @@
     "react-router-dom": "^6.20.1"
   },
   "devDependencies": {
+    "@types/date-fns": "^2.5.3",
     "@types/leaflet": "^1.9.8",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
