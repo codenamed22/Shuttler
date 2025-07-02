@@ -45,8 +45,8 @@ public class Dashboard {
             response.setStopId(arrival.getStopId());
             response.setStopName(arrival.getStopName());
             response.setActualArrival(actual);
-            response.setEta10minBefore(closestEta(beforeArrival, actual, 10));
             response.setEta5minBefore(closestEta(beforeArrival, actual, 5));
+            response.setEta3minBefore(closestEta(beforeArrival, actual, 3));
             response.setEta2minBefore(closestEta(beforeArrival, actual, 2));
 
             responseList.add(response);

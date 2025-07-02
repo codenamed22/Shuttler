@@ -4,7 +4,7 @@ import time
 import math
 
 class Bus:
-    def __init__(self, route, speed_kmph= 25.0, gps_noise=0.0001):
+    def __init__(self, route, speed_kmph= 25.0, gps_noise=0.000001):
         self.bus_id = None
         self.route_id = None
         self.route_points = []
@@ -15,6 +15,7 @@ class Bus:
         self.current_index = 0      # index on the route
         self.speed_kmph = speed_kmph
         self.gps_noise_std = gps_noise
+        self.occupancy = random.randint(5,25)  # Random occupancy between 0 and 50
         
         self.pause_until = 0        # for simulating stop pause
         self._load_route(route)
@@ -90,6 +91,10 @@ class Bus:
             stop_id = stop['stopId']
             if self._haversine(simulated_point, stop_point) < 20 and stop_id != self.last_stop_id:  # within
                 self.pause_until = now + random.uniform(30, 120)
+                people_left = random.randint(0, 5)  # Random number of people left
+                people_entered = random.randint(0, 5)  # Random number of people entered
+                self.occupancy = min(max(0, self.occupancy - people_left + people_entered),50)  # Clamp occupancy between 0 and 50
+                print(f"Occupancy at stop {stop_id}: {self.occupancy}")
                 self.last_stop_id = stop_id
                 print(f"Pausing at stop {stop_id} for {self.pause_until - now:.2f} seconds")
                 break
@@ -106,7 +111,8 @@ class Bus:
             "busId": self.bus_id,
             "lat": point[0],
             "lon": point[1],
-            "timestamp": int(timestamp)
+            "timestamp": int(timestamp),
+            "occupancy": self.occupancy
         }
     
     def _haversine(self, a, b):

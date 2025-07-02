@@ -15,8 +15,8 @@ public class StopEtaResponse {
     private String stopId;
     private String stopName;
     private LocalDateTime actualArrival;
-    private LocalDateTime eta10minBefore;
     private LocalDateTime eta5minBefore;
+    private LocalDateTime eta3minBefore;
     private LocalDateTime eta2minBefore;
 
 }

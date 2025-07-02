@@ -6,6 +6,7 @@
       "properties": {
         "routeId": "kiit_campus_loop",
         "busId": "bus01",
+        "driver": "John Doe",
         "stops": [
           {
             "stopId": "stop_kc_1",
