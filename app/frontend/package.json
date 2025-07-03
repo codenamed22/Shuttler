@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "jest --watch"
+    "test": "jest --watch",
+    "coverage": "jest --coverage"
   },
   "dependencies": {
     "clsx": "^2.0.0",

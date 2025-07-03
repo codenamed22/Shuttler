@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { toMillis } from "../utils/time";
 
 /* ─────────── types ─────────── */
-interface BusMeta { id: string; name: string }
+interface BusMeta { id: string }
 
 /**
  * One row of the ETA dashboard.
@@ -27,7 +27,7 @@ const API_BASE = (
   import.meta.env.VITE_API_BASE ?? "http://localhost:8080/api/dashboard"
 ).replace(/\/$/, "");
 
-const fetchBuses = async (): Promise<BusMeta[]> => {
+const fetchBuses = async (): Promise<string[]> => {
   const res = await fetch(`${API_BASE}/buses`);
   if (!res.ok) throw new Error("Unable to load bus list from server");
   return res.json();
@@ -61,7 +61,7 @@ const msgForPending = (mins: 5 | 3 | 2) => `No data ${mins}\u00A0min before`;
 
 /* ─────────── component ─────────── */
 const BusEtaTable: React.FC = () => {
-  const [busList, setBusList] = useState<BusMeta[]>([]);
+  const [busList, setBusList] = useState<string[]>([]);
   const [selectedBus, setSelectedBus] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(
     format(new Date(), "yyyy-MM-dd")
@@ -129,8 +129,8 @@ const BusEtaTable: React.FC = () => {
               Select bus
             </option>
             {busList.map((b) => (
-             <option key={b.id} value={b.id}>
-              {b.name}
+             <option key={b} value={b}>
+              {b}
              </option>
             ))}
           </select>
