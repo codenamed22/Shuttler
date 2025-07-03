@@ -16,6 +16,7 @@ export interface PingMessage {
   timestamp: number;                 // seconds or ms – your consumer decides
   arrivedStops: string[];
   arrivalTimes?: Record<string, number>;
+  occupancy?: number; 
 }
 
 /* ---------- listener type ---------- */

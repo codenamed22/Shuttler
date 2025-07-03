@@ -14,10 +14,10 @@ import React, {
   useState,
 } from 'react';
 import { getDistance } from 'geolib';
-
-import { GPSSocket, PingMessage } from '../services/gpsSocket';
+import { gpsSocket, PingMessage } from '../services/gpsSocket';
 import { Bus, BusStop } from '../types';
 import { BUS_ROUTE_MAP } from '../constants/routeMap';
+import type { PropsWithChildren } from 'react';
 
 /* ---------- types ---------- */
 type BusMap = Record<string, Bus>;
@@ -33,16 +33,14 @@ const ROUTE_BASE_URL = 'http://localhost:8000'; // geojson host
 /* ------------------------------------------------------------------ */
 /* Provider                                                           */
 /* ------------------------------------------------------------------ */
-export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const LiveBusProvider: React.FC<PropsWithChildren> = ({ children }: PropsWithChildren<{}>,) => {
   const [buses, setBuses] = useState<BusMap>({});
   const loadedRoutes = useRef<Set<string>>(new Set());
   const etaSockets   = useRef<Record<string, WebSocket>>({});
 
   /* ────────── 1. GPS ping stream (port 8080 → see GPSSocket) ────────── */
   useEffect(() => {
-    const gps = new GPSSocket();
+    const gps = gpsSocket;
 
     gps.onPing((ping: PingMessage) => {
       if (!Number.isFinite(ping.lat) || !Number.isFinite(ping.lon)) return;
@@ -93,6 +91,7 @@ export const LiveBusProvider: React.FC<{ children: React.ReactNode }> = ({
             stops: updatedStops,
             completedRouteIndex:
               (ping as any).index ?? base.completedRouteIndex,
+             occupancy: ping.occupancy ?? base.occupancy, 
           },
         };
       });
