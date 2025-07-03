@@ -16,17 +16,7 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "skipLibCheck": false,
-    "forceConsistentCasingInFileNames": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "types": [
-      "vite/client",   
-      "jest",          
-      "node",
-      "@testing-library/jest-dom"          
-    ]        
+    "forceConsistentCasingInFileNames": true
   },
-
-  "include": ["src", "vite-env.d.ts"],
-  "exclude": ["node_modules"]
+  "include": ["src"]
 }
