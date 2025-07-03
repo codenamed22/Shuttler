@@ -1,143 +1,370 @@
-# Database Setup Guide
+# Shuttler - Real-Time Bus Tracking System Setup Guide
 
-This guide will help you set up the MySQL database for the Shuttler real-time bus tracking system using the provided `full_dump.sql` file.
+This comprehensive guide will help you set up and run the complete Shuttler real-time bus tracking system on your local machine.
+
+## System Overview
+
+The Shuttler system consists of four main components:
+
+1. **GPS Simulator** (Python) - Simulates real-time bus GPS data
+2. **ETA Engine** (Spring Boot/Java) - Processes GPS data and predicts arrival times
+3. **Frontend** (React/TypeScript) - Interactive web interface for tracking buses
+4. **CORS Proxy Server** (Python) - Serves route GeoJSON files with CORS headers
+5. **MySQL Database** - Stores ETA predictions and arrival data
 
 ## Prerequisites
 
-Before setting up the database, ensure you have:
+Before setting up the project, ensure you have the following installed:
 
-- **MySQL Server 8.0+** installed on your system
+### Required Software
 
-## Database Overview
+- **Java 17+** - Required for Spring Boot application
+- **Maven 3.6+** - For building the Java backend
+- **Node.js 18+** and **npm** - For the React frontend
+- **Python 3.8+** and **pip** - For GPS simulator and CORS server
+- **MySQL 8.0+** - Database server
+- **Git** - For version control (if cloning)
 
-The Shuttler system uses a MySQL database named `shuttle_db` with the following tables:
+### Verify Prerequisites
 
-### 1. `eta_predictions` Table
-Stores predicted arrival times for buses at various stops.
+Run these commands to verify your installations:
 
-**Columns:**
-- `id` (bigint, PRIMARY KEY, AUTO_INCREMENT)
-- `bus_id` (varchar(255), NOT NULL) - Bus identifier (e.g., 'bus01')
-- `stop_id` (varchar(255), NOT NULL) - Stop identifier (e.g., 'stop_kc_1')
-- `stop_name` (varchar(255)) - Human-readable stop name
-- `predicted_arrival_time` (datetime, NOT NULL) - Predicted arrival time
-- `created_at` (timestamp, DEFAULT CURRENT_TIMESTAMP) - Record creation time
-- `date` (date, NOT NULL) - Date of the prediction
+```powershell
+# Check Java version
+java -version
 
-### 2. `stop_arrivals` Table
-Records actual bus arrivals at stops for accuracy tracking.
+# Check Maven version
+mvn -version
 
-**Columns:**
-- `id` (bigint, PRIMARY KEY, AUTO_INCREMENT)
-- `bus_id` (varchar(255), NOT NULL) - Bus identifier
-- `stop_id` (varchar(255), NOT NULL) - Stop identifier
-- `stop_name` (varchar(255)) - Human-readable stop name
-- `arrival_time` (datetime, NOT NULL) - Actual arrival time
-- `date` (date, NOT NULL) - Date of arrival
-- `created_at` (timestamp, DEFAULT CURRENT_TIMESTAMP) - Record creation time
+# Check Node.js and npm versions
+node --version
+npm --version
 
-## Setup Instructions
+# Check Python version
+python --version
 
-### Option 1: Using MySQL Command Line
+# Check MySQL installation
+mysql --version
+```
 
-1. **Start MySQL service** (if not already running):
+## Environment Setup
 
+### 1. Database Configuration
 
-2. **Login to MySQL** :
+#### Create Environment File
 
+Create a `.env` file in the project root directory:
 
-3. **Create the database** (if it doesn't exist):
-   ```sql
-   CREATE DATABASE IF NOT EXISTS shuttle_db;
-   USE shuttle_db;
+```bash
+# Database Configuration
+DB_USERNAME=your_mysql_username
+DB_PASSWORD=your_mysql_password
+```
+
+#### Set up MySQL Database
+
+1. **Start MySQL service**:
+
+   ```powershell
+   # Start MySQL service (Windows)
+   net start mysql
    ```
 
-4. **Import the dump file through cmd or powershell**:
-   ```bash
-   # Exit MySQL first
+2. **Create database and import schema**:
+
+   ```powershell
+   # Login to MySQL
+   mysql -u root -p
+
+   # Create database
+   CREATE DATABASE IF NOT EXISTS shuttle_db;
+   USE shuttle_db;
    exit
-   
-   # Import the dump file
+
+   # Import the database dump
    mysql -u root -p shuttle_db < "app/full_dump.sql"
    ```
 
+3. **Verify database setup**:
 
-## Database Configuration
+   ```sql
+   USE shuttle_db;
+   SHOW TABLES;
+   SELECT COUNT(*) FROM eta_predictions;
+   SELECT COUNT(*) FROM stop_arrivals;
+   ```
 
-### Connection Parameters
+## Quick Start (Automated)
 
-Update your application configuration with these database connection details:
+The easiest way to run the entire system is using the provided `start.sh` script:
 
-```properties
-# application.properties (Spring Boot)
-spring.datasource.url=jdbc:mysql://localhost:3306/shuttle_db
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
+### For Windows Users
+
+Since the script is written for bash, you have a few options:
+
+#### Option 1: Use Git Bash
+
+```bash
+cd app
+bash start.sh
 ```
 
+#### Option 2: Manual Component Startup (Recommended for Windows)
 
-## Verification
+Follow the manual setup steps below to start each component individually.
 
-After setup, verify the database is working correctly:
+## Manual Setup (Step-by-Step)
 
-### Check Tables
-```sql
-USE shuttle_db;
-SHOW TABLES;
+If you prefer to understand each component or need to troubleshoot, follow these manual steps:
+
+### 1. Start CORS Proxy Server
+
+```powershell
+cd app/routes
+python cors_server.py
 ```
 
-Expected output:
-```
-+----------------------+
-| Tables_in_shuttle_db |
-+----------------------+
-| eta_predictions      |
-| stop_arrivals        |
-+----------------------+
-```
+**Expected output**: Server starts on `http://localhost:8000`
 
-### Check Data
-```sql
--- Check eta_predictions table
-SELECT COUNT(*) as total_predictions FROM eta_predictions;
+### 2. Start GPS Simulator
 
--- Check stop_arrivals table  
-SELECT COUNT(*) as total_arrivals FROM stop_arrivals;
-
--- View recent predictions
-SELECT bus_id, stop_name, predicted_arrival_time, created_at 
-FROM eta_predictions 
-ORDER BY created_at DESC 
-LIMIT 5;
+```powershell
+cd app/gps_simulator
+pip install -r requirements.txt
+python simulator.py
 ```
 
-### Sample Routes Data
+**Expected output**: WebSocket server starts on `ws://localhost:8765`
 
-The database contains data for the KIIT Campus Loop route with these stops:
+### 3. Start ETA Engine (Spring Boot Backend)
 
-1. **stop_kc_1** - KIIT Campus 6
-2. **stop_kc_2** - KIIT Campus 3  
-3. **stop_kc_3** - KIMS Gate
-4. **stop_kc_4** - Shikharachandi
-5. **stop_kc_5** - Infocity Square
-6. **stop_kc_6** - Sai International
-7. **stop_kc_7** - KIIT Campus 15
-8. **stop_kc_8** - KP-7
+```powershell
+cd app/etaengine
+mvn clean install
+java -jar target/etaengine-0.0.1-SNAPSHOT.jar --DB_USERNAME=your_username --DB_PASSWORD=your_password
+```
 
+**Expected output**: Spring Boot app starts on `http://localhost:8080`
 
+### 4. Start React Frontend
 
-## Next Steps
+```powershell
+cd app/frontend
+npm install
+npm run dev
+```
 
-After successful database setup:
+**Expected output**: Vite dev server starts on `http://localhost:5173`
 
-1. **Configure your Spring Boot application** with the correct database credentials
-2. **Start the ETA Engine service** to begin receiving GPS data
-3. **Run the GPS simulator** to test the system with mock data
-4. **Access the frontend** to view real-time bus tracking
+## System Architecture
+
+### Port Configuration
+
+- **Frontend (React)**: `http://localhost:5173`
+- **Backend (Spring Boot)**: `http://localhost:8080`
+- **CORS Proxy**: `http://localhost:8000`
+- **GPS Simulator WebSocket**: `ws://localhost:8765`
+- **ETA WebSocket**: `ws://localhost:8080/ws/eta`
+- **MySQL Database**: `localhost:3306`
+
+### Data Flow
+
+1. **GPS Simulator** generates mock GPS coordinates and broadcasts them via WebSocket (`ws://localhost:8765`)
+2. **ETA Engine** connects to GPS simulator, processes GPS data, and:
+   - Applies Kalman filtering for position smoothing
+   - Calculates ETAs using route data
+   - Stores predictions in MySQL database
+   - Broadcasts live updates via WebSocket (`ws://localhost:8080/ws/eta`)
+3. **Frontend** connects to ETA Engine WebSocket and displays:
+   - Real-time bus positions on interactive map
+   - Live ETA predictions for each stop
+   - Route visualization with stop markers
+4. **CORS Proxy** serves GeoJSON route files with proper CORS headers
+
+## Database Schema
+
+The system uses two main tables:
+
+### `eta_predictions` Table
+
+- `id` - Primary key
+- `bus_id` - Bus identifier (e.g., 'bus01')
+- `stop_id` - Stop identifier (e.g., 'stop_kc_1')
+- `stop_name` - Human-readable stop name
+- `predicted_arrival_time` - Predicted arrival time
+- `created_at` - Record creation timestamp
+- `date` - Prediction date
+
+### `stop_arrivals` Table
+
+- `id` - Primary key
+- `bus_id` - Bus identifier
+- `stop_id` - Stop identifier
+- `stop_name` - Human-readable stop name
+- `arrival_time` - Actual arrival time
+- `date` - Arrival date
+- `created_at` - Record creation timestamp
+
+## Accessing the Application
+
+Once all services are running:
+
+1. **Open your browser** and navigate to: `http://localhost:5173`
+2. **You should see**:
+   - Interactive map with KIIT Campus Loop route
+   - Real-time bus positions (simulated)
+   - ETA predictions for each stop
+   - Bus information cards with live updates
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. Database Connection Issues
+
+**Error**: `Could not connect to MySQL database`
+
+**Solutions**:
+
+- Verify MySQL service is running: `net start mysql`
+- Check credentials in `.env` file
+- Ensure database `shuttle_db` exists
+- Verify firewall settings allow MySQL connections
+
+#### 2. Port Already in Use
+
+**Error**: `Port XXXX already in use`
+
+**Solutions**:
+
+- Kill existing processes using the port:
+
+  ```powershell
+  # Find process using port 8080
+  netstat -ano | findstr :8080
+  # Kill process by PID
+  taskkill /PID <PID> /F
+  ```
+
+- Change port configuration in respective configuration files
+
+#### 3. Java/Maven Issues
+
+**Error**: `Java version incompatibility`
+
+**Solutions**:
+
+- Ensure Java 17+ is installed and set in PATH
+- Update `JAVA_HOME` environment variable
+- Clean Maven cache: `mvn clean install -U`
+
+#### 4. Node.js/npm Issues
+
+**Error**: `npm install fails`
+
+**Solutions**:
+
+- Clear npm cache: `npm cache clean --force`
+- Delete `node_modules` and `package-lock.json`, then reinstall
+- Use Node.js 18+ (latest LTS recommended)
+
+#### 5. Python Dependencies Issues
+
+**Error**: `Module not found`
+
+**Solutions**:
+
+- Ensure Python 3.8+ is installed
+- Install dependencies: `pip install -r requirements.txt`
+- Use virtual environment if needed:
+
+  ```powershell
+  python -m venv venv
+  venv\Scripts\activate
+  pip install -r requirements.txt
+  ```
+
+#### 6. WebSocket Connection Issues
+
+**Error**: `WebSocket connection failed`
+
+**Solutions**:
+
+- Ensure all services are running in correct order
+- Check firewall/antivirus blocking WebSocket connections
+- Verify port configurations match between services
+- Clear browser cache and cookies
+
+#### 7. CORS Issues
+
+**Error**: `CORS policy blocked`
+
+**Solutions**:
+
+- Ensure CORS proxy server is running on port 8000
+- Check if antivirus is blocking the CORS server
+- Verify GeoJSON files exist in `/routes` directory
+
+### Service Health Checks
+
+Use these endpoints to verify services are running:
+
+- **Backend Health**: `http://localhost:8080/actuator/health` (if actuator is enabled)
+- **Frontend**: `http://localhost:5173`
+- **CORS Proxy**: `http://localhost:8000/route_kiit_campus_loop.geojson`
+
+### Log Files
+
+Check log files in the `logs/` directory for detailed error information:
+
+- `etaengine.log` - Backend application logs
+- `frontend.log` - Frontend build/runtime logs
+- `gps_simulator.log` - GPS simulator logs
+- `cors_server.log` - CORS proxy server logs
+
+### Performance Optimization
+
+For better performance:
+
+1. **Increase Java heap size**:
+
+   ```powershell
+   java -Xmx2g -jar target/etaengine-0.0.1-SNAPSHOT.jar
+   ```
+
+2. **Use production build for frontend**:
+
+   ```powershell
+   npm run build
+   npm run preview
+   ```
+
+3. **Optimize MySQL configuration** for your system resources
+
+## Development Tips
+
+### Making Changes
+
+- **Backend changes**: Restart Spring Boot application
+- **Frontend changes**: Vite hot-reload will update automatically
+- **Database schema changes**: Update `full_dump.sql` and reimport
+- **Route changes**: Modify GeoJSON files in `/routes` directory
+
+### Adding New Routes
+
+1. Create new GeoJSON file in `/routes` directory
+2. Update route mapping in frontend (`src/constants/routeMap.ts`)
+3. Add corresponding database entries for new stops
+
+## Support
+
+If you encounter issues not covered in this guide:
+
+1. Check the log files in the `logs/` directory
+2. Verify all prerequisites are correctly installed
+3. Ensure all environment variables are properly set
+4. Try restarting services in the correct order
 
 ---
 
-**Note**: This database contains sample data from June 30, 2025. The ETA predictions and stop arrivals are for testing purposes and demonstrate the system's data structure and functionality.
+**Note**: This system includes sample data for the KIIT Campus Loop route with 8 stops. The GPS simulator will generate realistic movement patterns for testing purposes.
