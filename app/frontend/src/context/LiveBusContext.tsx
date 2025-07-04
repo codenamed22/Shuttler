@@ -132,6 +132,7 @@ export const LiveBusProvider: React.FC<PropsWithChildren> = ({ children }: Props
               route,
               origin:       stopsRaw[0]?.name      ?? '–',
               destination:  stopsRaw.at(-1)?.name ?? '–',
+              driver: geo.features[0].properties.driver,
               stops: stopsRaw.map(
                 (s): BusStop => ({
                   id:   s.stopId,
