@@ -81,9 +81,10 @@ class Bus:
                 # Reached end or beginning of the route
                 self.end_pause_until = now + random.uniform(60, 120)  # 1–2 min pause
                 self.direction *= -1  # reverse direction
+                simulated_point = self.current_points
                 break
         else:
-            simulated_point = self.route_points[self.current_points]
+            simulated_point = self.current_points
             
         # Check for stop pause
         for stop in self.stops:

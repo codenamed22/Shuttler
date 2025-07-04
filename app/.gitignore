@@ -1,6 +1,7 @@
 
 #Ignore pycache files
 __pycache__/
+.pytest_cache/
 
 =======
 # Node modules
@@ -36,3 +37,5 @@ __pycache__
 *.pyc
 logs
 .env
+coverage
+.coverage
