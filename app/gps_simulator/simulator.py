@@ -33,7 +33,7 @@ async def run_simulation():
     #Main simulation loop
     while True:
         for bus in buses:
-            tick = random.uniform(0.5, 1.5)
+            tick = random.uniform(0.5, 1)
             ping = bus.next_ping(tick)  # Random tick between 0.5 and 1.5 seconds
             await broadcast_message(ping)
             #print(f"Bus {bus.id} pinged at {ping['timestamp']}")
