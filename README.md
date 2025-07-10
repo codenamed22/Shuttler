@@ -4,7 +4,7 @@
 
 <p id="description">A Real-Time Shuttle Tracker &amp; ETA Predictor application that helps to know when the next bus will arrive leading to wasted time and overcrowded stops.</p>
 
-<p align="center"><img src="https://img.shields.io/badge/Shuttler-app-blue?style=flat" alt="shields"><img src="https://img.shields.io/badge/Java-brown?style=flat" alt="shields"><img src="https://img.shields.io/badge/React-blue?style=flat" alt="shields"><img src="https://img.shields.io/badge/Py-thon-yellow?style=flat&amp;labelColor=blue" alt="shields"></p>
+<p align="center"> <img src="https://img.shields.io/badge/Shuttler-app-blue?style=flat" alt="shields"> <img src="https://img.shields.io/badge/Java-brown?style=flat" alt="shields"> <img src="https://img.shields.io/badge/React-blue?style=flat" alt="shields"> <img src="https://img.shields.io/badge/Py-thon-yellow?style=flat&amp;labelColor=blue" alt="shields"></p>
 
 <h2>Project Screenshots:</h2>
 
@@ -34,3 +34,8 @@ Technologies used in the project:
 * Typescript
 * Springboot
 * Websockets
+* Python
+
+<h2>🚀 Setup / Installation</h2>
+
+For local installation and use of this application, please refer to [Setup](app/docs/SETUP.md)
